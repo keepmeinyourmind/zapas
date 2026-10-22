@@ -12,7 +12,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/keepmeinyourmind/zapas/src/internal/api"
 	"github.com/keepmeinyourmind/zapas/src/internal/config"
+	"github.com/keepmeinyourmind/zapas/src/internal/service"
 	"github.com/keepmeinyourmind/zapas/src/internal/storage"
 )
 
@@ -46,13 +48,10 @@ func run(log *slog.Logger) error {
 	}
 	log.Info("миграции применены")
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	})
+	svc := service.New(storage.New(pool), cfg.Engine, log)
+	handler := api.NewServer(svc, cfg.CORSOrigin, log)
 
-	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: mux}
+	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: handler.Routes()}
 
 	errCh := make(chan error, 1)
 	go func() {
