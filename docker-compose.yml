@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: zapas
+      POSTGRES_PASSWORD: zapas
+      POSTGRES_DB: zapas
+    ports: ["5433:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zapas"]
+      interval: 2s
+      retries: 15
+volumes:
+  pgdata:

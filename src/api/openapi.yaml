@@ -1,0 +1,444 @@
+openapi: 3.0.3
+info:
+  title: Запас — умная копилка
+  version: 0.1.0
+  description: |
+    Контракт бэкенда «Запас». Менять только по согласованию с фронтендом.
+
+    - Все суммы — **целые числа в копейках** (3000 ₽ = `300000`).
+    - Время — RFC 3339 (`2026-10-25T10:00:00Z`).
+    - Тексты `reason` на русском, готовы к показу клиенту.
+servers:
+  - url: http://localhost:8080
+
+# Авторизации в MVP нет
+security: []
+
+tags:
+  - name: system
+  - name: rule
+    description: Правило копилки
+  - name: transactions
+  - name: decisions
+  - name: demo
+    description: Только для демо и тестов
+
+paths:
+  /health:
+    get:
+      tags: [system]
+      summary: Проверка живости
+      responses:
+        "200":
+          description: Сервис работает
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+
+  /api/clients/{id}/rule:
+    parameters:
+      - $ref: "#/components/parameters/ClientID"
+    put:
+      tags: [rule]
+      summary: Создать или заменить правило копилки
+      description: |
+        Новый клиент без истории дополнительно передаёт `declared_income`
+        (примерный месячный доход). `client_id` берётся из пути.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SavingsRule" }
+            example:
+              goal_name: Подушка
+              goal_amount: 3600000
+              term_months: 12
+              save_percent: 10
+              min_income: 300000
+              min_transfer: 10000
+              declared_income: 3000000
+              paused: false
+      responses:
+        "200":
+          description: Правило сохранено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SavingsRule" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+    patch:
+      tags: [rule]
+      summary: Частично изменить правило (пауза, процент)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SavingsRulePatch" }
+            example:
+              paused: true
+      responses:
+        "200":
+          description: Правило обновлено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SavingsRule" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/transactions:
+    post:
+      tags: [transactions]
+      summary: Принять транзакцию по карте
+      description: |
+        Идемпотентно по `id`: повторная отправка той же транзакции не создаёт
+        второго решения и второго перевода. Ответ содержит решение, если
+        поступление признано доходом, и `null` в остальных случаях.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Transaction" }
+            example:
+              id: tx-1001
+              client_id: anya
+              amount: 3000000
+              type: incoming
+              counterparty: ООО Ромашка
+              counterparty_kind: legal
+              occurred_at: "2026-10-25T10:00:00Z"
+      responses:
+        "200":
+          description: Транзакция уже была обработана ранее (повтор)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransactionResult" }
+        "201":
+          description: Транзакция принята
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransactionResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/clients/{id}/transactions:
+    parameters:
+      - $ref: "#/components/parameters/ClientID"
+    get:
+      tags: [transactions]
+      summary: Операции с меткой классификатора
+      description: Для экрана «Доходы и расходы». Сортировка по `occurred_at`, новые первыми.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Список операций
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ClassifiedTransaction" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/clients/{id}/savings:
+    parameters:
+      - $ref: "#/components/parameters/ClientID"
+    get:
+      tags: [rule]
+      summary: Баланс копилки, цель и прогресс
+      responses:
+        "200":
+          description: Состояние копилки
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Savings" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/clients/{id}/decisions:
+    parameters:
+      - $ref: "#/components/parameters/ClientID"
+    get:
+      tags: [decisions]
+      summary: История решений с причинами
+      parameters:
+        - name: status
+          in: query
+          description: Фильтр по статусу, например `pending` — открытые вопросы
+          schema: { $ref: "#/components/schemas/DecisionStatus" }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Решения, новые первыми
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Decision" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/decisions/{id}/answer:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [decisions]
+      summary: Ответить на вопрос системы
+      description: |
+        `choice=amount` — перевести `amount` (должна быть одной из `options`
+        либо не больше безопасной суммы); `choice=skip` — пропустить.
+        Если вопрос уже истёк, вернётся `409` с тем, что сделано автоматически.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnswerRequest" }
+            examples:
+              amount:
+                value: { choice: amount, amount: 100000 }
+              skip:
+                value: { choice: skip }
+      responses:
+        "200":
+          description: Ответ принят, решение обновлено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Decision" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Вопрос уже закрыт (истёк или есть ответ)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/scenarios/{name}/run:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [stable, income_drop, self_transfer, new_client, income_rise]
+    post:
+      tags: [demo]
+      summary: Сбросить клиента Аню и прогнать сценарий
+      description: Детерминированно, одинаковый сценарий всегда даёт одинаковый результат.
+      responses:
+        "200":
+          description: Сценарий выполнен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  client_id: { type: string, example: anya }
+                  decision:
+                    nullable: true
+                    allOf:
+                      - $ref: "#/components/schemas/Decision"
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/debug/advance-time:
+    post:
+      tags: [demo]
+      summary: Сдвинуть время вперёд, чтобы сработали таймауты
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hours]
+              properties:
+                hours: { type: integer, minimum: 1, example: 25 }
+      responses:
+        "200":
+          description: Просроченные вопросы закрыты безопасным вариантом
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  expired:
+                    type: array
+                    items: { $ref: "#/components/schemas/Decision" }
+
+components:
+  parameters:
+    ClientID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, example: anya }
+
+  responses:
+    ValidationError:
+      description: Некорректные данные
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: Процент должен быть от 1 до 50 }
+    NotFound:
+      description: Не найдено
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Money:
+      type: integer
+      format: int64
+      description: Сумма в копейках
+      example: 300000
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string, description: Сообщение на русском }
+
+    TxKind:
+      type: string
+      enum: [incoming, outgoing, refund, internal, loan]
+
+    CounterpartyKind:
+      type: string
+      description: Вид отправителя или получателя
+      enum: [legal, person, self, bank]
+
+    IncomeKind:
+      type: string
+      enum: [salary, advance, bonus, scholarship, freelance, none]
+
+    DecisionAction:
+      type: string
+      enum: [auto, ask, skip, suggest_raise]
+
+    DecisionStatus:
+      type: string
+      enum: [pending, executed, skipped, expired]
+
+    SavingsRule:
+      type: object
+      required: [goal_name, goal_amount, term_months, save_percent]
+      properties:
+        client_id: { type: string, readOnly: true, example: anya }
+        goal_name: { type: string, example: Подушка }
+        goal_amount: { $ref: "#/components/schemas/Money" }
+        term_months: { type: integer, enum: [6, 12, 24] }
+        save_percent:
+          type: integer
+          minimum: 1
+          maximum: 50
+          description: Доля дохода, которую откладываем
+        min_income:
+          description: Поступления меньше этой суммы не трогаем
+          allOf:
+            - $ref: "#/components/schemas/Money"
+        min_transfer:
+          description: Минимальный перевод, по умолчанию 10000 (100 ₽)
+          allOf:
+            - $ref: "#/components/schemas/Money"
+        declared_income:
+          description: Примерный месячный доход из анкеты (для клиента без истории)
+          allOf:
+            - $ref: "#/components/schemas/Money"
+        paused: { type: boolean, default: false }
+
+    SavingsRulePatch:
+      type: object
+      description: Передаются только изменяемые поля
+      properties:
+        paused: { type: boolean }
+        save_percent: { type: integer, minimum: 1, maximum: 50 }
+
+    Transaction:
+      type: object
+      required: [id, client_id, amount, type, counterparty_kind, occurred_at]
+      properties:
+        id: { type: string, description: Уникален; по нему идемпотентность }
+        client_id: { type: string }
+        amount: { $ref: "#/components/schemas/Money" }
+        type: { $ref: "#/components/schemas/TxKind" }
+        counterparty: { type: string, example: ООО Ромашка }
+        counterparty_kind: { $ref: "#/components/schemas/CounterpartyKind" }
+        occurred_at: { type: string, format: date-time }
+
+    ClassifiedTransaction:
+      allOf:
+        - $ref: "#/components/schemas/Transaction"
+        - type: object
+          required: [income_kind]
+          properties:
+            income_kind: { $ref: "#/components/schemas/IncomeKind" }
+
+    TransactionResult:
+      type: object
+      required: [income_kind]
+      properties:
+        income_kind: { $ref: "#/components/schemas/IncomeKind" }
+        decision:
+          nullable: true
+          description: "`null`, если поступление не доход"
+          allOf:
+            - $ref: "#/components/schemas/Decision"
+
+    Decision:
+      type: object
+      required: [id, client_id, source_tx_id, action, amount, reason, status, created_at]
+      properties:
+        id: { type: string }
+        client_id: { type: string }
+        source_tx_id: { type: string }
+        action: { $ref: "#/components/schemas/DecisionAction" }
+        amount:
+          description: Предлагаемая или переведённая сумма
+          allOf:
+            - $ref: "#/components/schemas/Money"
+        options:
+          type: array
+          description: Варианты ответа для `ask`; «пропустить» есть всегда
+          items: { $ref: "#/components/schemas/Money" }
+        reason: { type: string, example: "Доход ниже обычного на 20%" }
+        status: { $ref: "#/components/schemas/DecisionStatus" }
+        created_at: { type: string, format: date-time }
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Только для `pending`; через 24 часа срабатывает безопасный вариант
+
+    AnswerRequest:
+      type: object
+      required: [choice]
+      properties:
+        choice: { type: string, enum: [amount, skip] }
+        amount:
+          description: Обязательна при `choice=amount`
+          allOf:
+            - $ref: "#/components/schemas/Money"
+
+    Savings:
+      type: object
+      properties:
+        client_id: { type: string }
+        goal_name: { type: string }
+        goal_amount: { $ref: "#/components/schemas/Money" }
+        balance: { $ref: "#/components/schemas/Money" }
+        progress_percent:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        paused: { type: boolean }
+        pending_decision_id:
+          type: string
+          nullable: true
+          description: Открытый вопрос клиенту, если есть

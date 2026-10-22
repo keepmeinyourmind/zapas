@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Go
+*.exe
+*.test
+*.out
+/src/bin/
+/src/server
+
+# Окружение и секреты
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+*.swp
