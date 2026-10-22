@@ -11,5 +11,13 @@ services:
       test: ["CMD-SHELL", "pg_isready -U zapas"]
       interval: 2s
       retries: 15
+
+  swagger:
+    image: swaggerapi/swagger-ui
+    environment:
+      SWAGGER_JSON: /spec/openapi.yaml
+    volumes: ["./src/api:/spec:ro"]
+    ports: ["8081:8080"]
+
 volumes:
   pgdata:
