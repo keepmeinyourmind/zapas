@@ -121,4 +121,4 @@ HTTP → internal/api → internal/service ─┬─ internal/classifier   до�
 
 ## Команда
 
-PM, Backend (Go), Frontend, Business/System Analyst.
+PM / System Analyst, Backend (Go), Frontend / Business Analyst.
