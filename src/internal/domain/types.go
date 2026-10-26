@@ -97,6 +97,9 @@ type SavingsRule struct {
 	MinTransfer    Money  `json:"min_transfer"`
 	DeclaredIncome Money  `json:"declared_income"`
 	Paused         bool   `json:"paused"`
+	QuietFrom      string `json:"quiet_from"` // тихие часы: с какого времени не беспокоить, "23:00"
+	QuietTo        string `json:"quiet_to"`   // до какого времени, "09:00"
+	Timezone       string `json:"timezone"`   // часовой пояс клиента, "Europe/Moscow"
 }
 
 const (
@@ -123,8 +126,8 @@ func (r SavingsRule) Validate() error {
 type TrustLevel int
 
 const (
-	TrustLevelLow  TrustLevel = iota // < 2 месяцев истории: низкий уровень доверия, всегда спрашиваем
-	TrustLevelMid                    // 2-6 месяцев: средний уровень доверия
+	TrustLevelLow  TrustLevel = iota // < 3 месяцев истории: низкий уровень доверия, всегда спрашиваем
+	TrustLevelMid                    // 3-5 месяцев: средний уровень доверия
 	TrustLevelHigh                   // > 6 месяцев: высокий уровень доверия
 )
 

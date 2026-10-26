@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Запас — умная копилка
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Контракт бэкенда «Запас». Менять только по согласованию с фронтендом.
 
@@ -16,10 +16,14 @@ security: []
 
 tags:
   - name: system
+  - name: onboarding
+    description: Анкета при подключении
   - name: rule
     description: Правило копилки
   - name: transactions
   - name: decisions
+  - name: events
+    description: События банка по счёту
   - name: demo
     description: Только для демо и тестов
 
@@ -38,6 +42,48 @@ paths:
                 properties:
                   status: { type: string, example: ok }
 
+  /api/clients/{id}/onboarding:
+    parameters:
+      - $ref: "#/components/parameters/ClientID"
+    post:
+      tags: [onboarding]
+      summary: Заполнить анкету перед подключением копилки
+      description: |
+        Первый шаг подключения. Порядок проверок: согласие на обработку данных →
+        возраст (18+) → есть ли доход → обязательные платежи меньше дохода → баллы анкеты.
+        Без `data_consent: true` — 400, анкета не сохраняется.
+        Отказ по возрасту, доходу или баллам — 200 с `eligible: false` и причинами в `reasons`.
+        `analysis_consent: false` → простой режим (`mode: simple`): фиксированный процент
+        с каждого поступления, без анализа операций и без вопросов.
+        Повторная анкета заменяет прежнюю.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OnboardingRequest" }
+            example:
+              data_consent: true
+              analysis_consent: true
+              birth_date: "2006-03-15"
+              monthly_income: 3000000
+              income_type: mixed
+              income_stability: irregular
+              income_months: 8
+              has_loans: true
+              monthly_payments: 700000
+      responses:
+        "200":
+          description: Анкета принята, в ответе — доступна ли копилка
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OnboardingResult" }
+              examples:
+                eligible:
+                  value: { client_id: anya, eligible: true, score: 80, mode: smart, reasons: [] }
+                rejected:
+                  value: { client_id: teen, eligible: false, score: 0, mode: smart, reasons: ["Копилка доступна с 18 лет"] }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
   /api/clients/{id}/rule:
     parameters:
       - $ref: "#/components/parameters/ClientID"
@@ -45,8 +91,9 @@ paths:
       tags: [rule]
       summary: Создать или заменить правило копилки
       description: |
-        Новый клиент без истории дополнительно передаёт `declared_income`
-        (примерный месячный доход). `client_id` берётся из пути.
+        Нужна одобренная анкета (`POST /onboarding`), иначе 409.
+        `declared_income` по умолчанию берётся из анкеты (`monthly_income`).
+        Тихие часы по умолчанию — 23:00–09:00, `Europe/Moscow`. `client_id` берётся из пути.
       requestBody:
         required: true
         content:
@@ -61,6 +108,9 @@ paths:
               min_transfer: 10000
               declared_income: 3000000
               paused: false
+              quiet_from: "23:00"
+              quiet_to: "09:00"
+              timezone: Europe/Moscow
       responses:
         "200":
           description: Правило сохранено
@@ -68,9 +118,10 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SavingsRule" }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
     patch:
       tags: [rule]
-      summary: Частично изменить правило (пауза, процент)
+      summary: Частично изменить правило (пауза, процент, тихие часы)
       requestBody:
         required: true
         content:
@@ -191,8 +242,12 @@ paths:
       tags: [decisions]
       summary: Ответить на вопрос системы
       description: |
-        `choice=amount` — перевести `amount` (должна быть одной из `options`
-        либо не больше безопасной суммы); `choice=skip` — пропустить.
+        Для вопроса о сумме (`action=ask`): `choice=amount` — перевести `amount`
+        (одна из `options` либо не больше безопасной суммы); `choice=skip` — пропустить.
+        Для вопроса «это ваш доход?» (`action=confirm_income`): `choice=yes` — отправитель
+        становится подтверждённым, по поступлению принимается решение о сумме;
+        `choice=no` — не доход.
+        Отвечать можно только на активный вопрос (`pending`); `queued` ждут своей очереди.
         Если вопрос уже истёк, вернётся `409` с тем, что сделано автоматически.
       requestBody:
         required: true
@@ -213,10 +268,42 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: Вопрос уже закрыт (истёк или есть ответ)
+          description: Вопрос уже закрыт (истёк или есть ответ), ещё в очереди или счёт арестован
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+
+  /api/events/account:
+    post:
+      tags: [events]
+      summary: Событие банка по счёту (арест / снятие ареста)
+      description: |
+        Приходит от систем банка, как транзакции. Идемпотентно по `id`.
+        События могут прийти не по порядку: применяется только событие новее последнего.
+        Пока счёт арестован, переводов в копилку нет, а ответы на вопросы возвращают 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccountEvent" }
+            example:
+              id: ev-1
+              client_id: anya
+              type: arrest_imposed
+              occurred_at: "2026-10-26T10:00:00Z"
+      responses:
+        "201":
+          description: Событие применено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountState" }
+        "200":
+          description: Повтор события, ничего не изменилось
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountState" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /api/scenarios/{name}/run:
     parameters:
@@ -285,6 +372,12 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
           example: { error: Процент должен быть от 1 до 50 }
+    Conflict:
+      description: Действие сейчас невозможно (нет анкеты, копилка недоступна, счёт арестован)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: "Сначала заполните анкету: без неё копилку подключить нельзя" }
     NotFound:
       description: Не найдено
       content:
@@ -319,11 +412,72 @@ components:
 
     DecisionAction:
       type: string
-      enum: [auto, ask, skip, suggest_raise]
+      description: |
+        `confirm_income` — вопрос «это ваш доход?» про поступление от незнакомого физлица.
+      enum: [auto, ask, skip, suggest_raise, confirm_income]
 
     DecisionStatus:
       type: string
-      enum: [pending, executed, skipped, expired]
+      description: |
+        `queued` — вопрос ждёт, пока клиент ответит на предыдущий: активный вопрос у клиента один.
+      enum: [queued, pending, executed, skipped, expired]
+
+    Mode:
+      type: string
+      description: "`smart` — с анализом доходов; `simple` — фиксированный процент, как автопополнение"
+      enum: [smart, simple]
+
+    OnboardingRequest:
+      type: object
+      required: [data_consent, analysis_consent, birth_date, monthly_income, income_type, income_stability, income_months, has_loans, monthly_payments]
+      properties:
+        data_consent: { type: boolean, description: "Согласие на обработку персональных данных (152-ФЗ); без него 400" }
+        analysis_consent: { type: boolean, description: "Согласие на анализ доходов и расходов; false → простой режим" }
+        birth_date: { type: string, format: date, example: "2006-03-15" }
+        monthly_income:
+          description: Примерный доход в месяц
+          allOf:
+            - $ref: "#/components/schemas/Money"
+        income_type:
+          type: string
+          enum: [salary, scholarship, freelance, mixed, none]
+        income_stability:
+          type: string
+          enum: [stable, irregular]
+        income_months: { type: integer, minimum: 0, description: Сколько месяцев уже есть доход }
+        has_loans: { type: boolean, description: "Есть ли кредиты, рассрочки, займы" }
+        monthly_payments:
+          description: "Обязательные платежи в месяц: кредиты, рассрочки, аренда, связь, подписки"
+          allOf:
+            - $ref: "#/components/schemas/Money"
+
+    OnboardingResult:
+      type: object
+      required: [client_id, eligible, score, mode, reasons]
+      properties:
+        client_id: { type: string }
+        eligible: { type: boolean, description: Доступна ли копилка }
+        score: { type: integer, minimum: 0, maximum: 100, description: Баллы анкеты }
+        mode: { $ref: "#/components/schemas/Mode" }
+        reasons:
+          type: array
+          description: Причины отказа на русском, готовы к показу; пусто, если доступна
+          items: { type: string }
+
+    AccountEvent:
+      type: object
+      required: [id, client_id, type, occurred_at]
+      properties:
+        id: { type: string, description: Уникален; по нему идемпотентность }
+        client_id: { type: string }
+        type: { type: string, enum: [arrest_imposed, arrest_lifted] }
+        occurred_at: { type: string, format: date-time }
+
+    AccountState:
+      type: object
+      properties:
+        client_id: { type: string }
+        arrested: { type: boolean }
 
     SavingsRule:
       type: object
@@ -351,6 +505,9 @@ components:
           allOf:
             - $ref: "#/components/schemas/Money"
         paused: { type: boolean, default: false }
+        quiet_from: { type: string, pattern: "^\\d{2}:\\d{2}$", default: "23:00", description: Тихие часы — с какого времени не беспокоить }
+        quiet_to: { type: string, pattern: "^\\d{2}:\\d{2}$", default: "09:00", description: Тихие часы — до какого времени }
+        timezone: { type: string, default: Europe/Moscow, description: Часовой пояс клиента (IANA) }
 
     SavingsRulePatch:
       type: object
@@ -358,6 +515,9 @@ components:
       properties:
         paused: { type: boolean }
         save_percent: { type: integer, minimum: 1, maximum: 50 }
+        quiet_from: { type: string, example: "22:00" }
+        quiet_to: { type: string, example: "08:00" }
+        timezone: { type: string, example: Asia/Yekaterinburg }
 
     Transaction:
       type: object
@@ -413,13 +573,21 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: Только для `pending`; через 24 часа срабатывает безопасный вариант
+          description: Только для `pending`; через 24 часа после `notify_at` срабатывает безопасный вариант
+        notify_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Когда отправить уведомление клиенту; если решение принято в тихие часы — их конец
 
     AnswerRequest:
       type: object
       required: [choice]
       properties:
-        choice: { type: string, enum: [amount, skip] }
+        choice:
+          type: string
+          description: "`amount`/`skip` — для вопроса о сумме; `yes`/`no` — для «это ваш доход?»"
+          enum: [amount, skip, yes, no]
         amount:
           description: Обязательна при `choice=amount`
           allOf:
@@ -438,6 +606,8 @@ components:
           minimum: 0
           maximum: 100
         paused: { type: boolean }
+        mode: { $ref: "#/components/schemas/Mode" }
+        arrested: { type: boolean, description: Счёт арестован — переводы невозможны }
         pending_decision_id:
           type: string
           nullable: true

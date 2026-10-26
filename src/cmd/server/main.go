@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata" // часовые пояса внутри бинарника: в Docker-образе alpine их нет
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -48,7 +49,7 @@ func run(log *slog.Logger) error {
 	}
 	log.Info("миграции применены")
 
-	svc := service.New(storage.New(pool), cfg.Engine, log)
+	svc := service.New(storage.New(pool), cfg, log)
 	handler := api.NewServer(svc, cfg.CORSOrigin, log)
 
 	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: handler.Routes()}

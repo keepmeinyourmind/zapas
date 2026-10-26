@@ -13,10 +13,11 @@ func (r *Repo) GetRule(ctx context.Context, clientID string) (domain.SavingsRule
 	var rule domain.SavingsRule
 	err := r.db.QueryRow(ctx, `
 		SELECT client_id, goal_name, goal_amount, term_months, save_percent,
-		       min_income, min_transfer, declared_income, paused
+		       min_income, min_transfer, declared_income, paused, quiet_from, quiet_to, timezone
 		FROM savings_rules WHERE client_id = $1`, clientID,
 	).Scan(&rule.ClientID, &rule.GoalName, &rule.GoalAmount, &rule.TermMonths, &rule.SavePercent,
-		&rule.MinIncome, &rule.MinTransfer, &rule.DeclaredIncome, &rule.Paused)
+		&rule.MinIncome, &rule.MinTransfer, &rule.DeclaredIncome, &rule.Paused,
+		&rule.QuietFrom, &rule.QuietTo, &rule.Timezone)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return rule, domain.ErrNotFound
 	}
@@ -27,15 +28,18 @@ func (r *Repo) GetRule(ctx context.Context, clientID string) (domain.SavingsRule
 func (r *Repo) UpsertRule(ctx context.Context, rule domain.SavingsRule) error {
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO savings_rules (client_id, goal_name, goal_amount, term_months, save_percent,
-		                           min_income, min_transfer, declared_income, paused)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		                           min_income, min_transfer, declared_income, paused,
+		                           quiet_from, quiet_to, timezone)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (client_id) DO UPDATE SET
 			goal_name = EXCLUDED.goal_name, goal_amount = EXCLUDED.goal_amount,
 			term_months = EXCLUDED.term_months, save_percent = EXCLUDED.save_percent,
 			min_income = EXCLUDED.min_income, min_transfer = EXCLUDED.min_transfer,
 			declared_income = EXCLUDED.declared_income, paused = EXCLUDED.paused,
+			quiet_from = EXCLUDED.quiet_from, quiet_to = EXCLUDED.quiet_to, timezone = EXCLUDED.timezone,
 			updated_at = now()`,
 		rule.ClientID, rule.GoalName, rule.GoalAmount, rule.TermMonths, rule.SavePercent,
-		rule.MinIncome, rule.MinTransfer, rule.DeclaredIncome, rule.Paused)
+		rule.MinIncome, rule.MinTransfer, rule.DeclaredIncome, rule.Paused,
+		rule.QuietFrom, rule.QuietTo, rule.Timezone)
 	return err
 }

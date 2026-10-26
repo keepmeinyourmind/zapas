@@ -7,6 +7,8 @@ type Client struct {
 	CardBalance    Money // собственные деньги на карте
 	CreditLimit    Money // доступный кредит; в расчёте безопасной суммы НЕ участвует
 	SavingsBalance Money // баланс копилки
+	Mode           Mode  // умный или простой режим
+	Arrested       bool  // счёт арестован: переводы невозможны
 }
 
 // ClassifiedTransaction — операция вместе с меткой классификатора.

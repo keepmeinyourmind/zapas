@@ -28,6 +28,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("PATCH /api/clients/{id}/rule", s.patchRule)
 	mux.HandleFunc("POST /api/transactions", s.postTransaction)
 	mux.HandleFunc("GET /api/clients/{id}/transactions", s.listTransactions)
+	mux.HandleFunc("POST /api/clients/{id}/onboarding", s.postOnboarding)
+	mux.HandleFunc("POST /api/events/account", s.postAccountEvent)
 	return s.cors(mux)
 }
 
@@ -58,7 +60,8 @@ func (s *Server) writeError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": ve.Error()})
 	case errors.Is(err, domain.ErrNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-	case errors.Is(err, domain.ErrDecisionClosed):
+	case errors.Is(err, domain.ErrDecisionClosed), errors.Is(err, domain.ErrOnboardingRequired),
+		errors.Is(err, domain.ErrNotEligible), errors.Is(err, domain.ErrAccountArrested):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 	default:
 		s.log.Error("внутренняя ошибка", "err", err)
