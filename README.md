@@ -37,7 +37,6 @@
 | `skip` | не доход, копилка на паузе, цель достигнута, сумма меньше 100 ₽ |
 | `suggest_raise` | доход вырос: переводим и предлагаем поднять процент |
 
-Подробно: [docs/plan.md](docs/plan.md).
 
 ## Запуск
 
@@ -115,8 +114,6 @@ HTTP → internal/api → internal/service ─┬─ internal/classifier   до�
 
 ## Документация
 
-- [docs/plan.md](docs/plan.md) — логика продукта, сценарии, пограничные случаи
-- [docs/backend.md](docs/backend.md) — устройство кода и порядок работ
 - [src/api/openapi.yaml](src/api/openapi.yaml) — контракт API
 
 ## Команда

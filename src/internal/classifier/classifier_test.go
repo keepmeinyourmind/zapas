@@ -99,7 +99,7 @@ func payment(counterparty string, rubles int64, at time.Time) domain.Transaction
 }
 
 // Выплаты организаций: зарплата, аванс или премия — смотрим на прошлые выплаты
-// того же отправителя за последние 40 дней (docs/backend.md, раздел 4.3).
+// того же отправителя за последние 40 дней.
 func TestClassifyLegalByHistory(t *testing.T) {
 	const work = "ООО Ромашка"
 
