@@ -519,7 +519,7 @@ func (s *Server) Routes() http.Handler {
 
 | Переменная | По умолчанию |
 |---|---|
-| `DATABASE_URL` | `postgres://zapas:zapas@localhost:5432/zapas?sslmode=disable` |
+| `DATABASE_URL` | `postgres://zapas:zapas@localhost:5433/zapas?sslmode=disable` |
 | `HTTP_ADDR` | `:8080` |
 | `CORS_ORIGIN` | `http://localhost:5173` |
 | `DROP_THRESHOLD`, `RAISE_THRESHOLD` | `0.15` |
@@ -685,7 +685,7 @@ services:
       POSTGRES_USER: zapas
       POSTGRES_PASSWORD: zapas
       POSTGRES_DB: zapas
-    ports: ["5432:5432"]
+    ports: ["5433:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U zapas"]
@@ -736,7 +736,7 @@ func testStore(t *testing.T) *storage.Store {
 }
 ```
 
-Запуск: `TEST_DATABASE_URL=postgres://zapas:zapas@localhost:5432/zapas?sslmode=disable go test ./...`
+Запуск: `TEST_DATABASE_URL=postgres://zapas:zapas@localhost:5433/zapas?sslmode=disable go test ./...`
 
 Шаблон теста движка — начни с главного сценария демо:
 
