@@ -28,7 +28,8 @@ func (s *Service) ProcessAccountEvent(ctx context.Context, e domain.AccountEvent
 	}
 
 	err = s.store.InTx(ctx, func(r *storage.Repo) error {
-		if _, err := r.GetClient(ctx, e.ClientID); err != nil {
+		// Блокируем клиента первым: потом закрываем его вопросы (порядок — клиент, потом решения).
+		if _, err := r.GetClientForUpdate(ctx, e.ClientID); err != nil {
 			return err
 		}
 		inserted, err := r.InsertAccountEvent(ctx, e)

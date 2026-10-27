@@ -96,6 +96,11 @@ func (r *Repo) UpdateDecision(ctx context.Context, d domain.Decision, answeredAt
 	return err
 }
 
+// GetDecision читает решение без блокировки: узнать клиента, чтобы сначала заблокировать его.
+func (r *Repo) GetDecision(ctx context.Context, id string) (domain.Decision, error) {
+	return scanDecision(r.db.QueryRow(ctx, `SELECT `+decisionColumns+` FROM decisions WHERE id = $1`, id))
+}
+
 // GetDecisionForUpdate читает решение и блокирует его до конца транзакции:
 // два одновременных ответа на один вопрос не исполнятся дважды.
 func (r *Repo) GetDecisionForUpdate(ctx context.Context, id string) (domain.Decision, error) {

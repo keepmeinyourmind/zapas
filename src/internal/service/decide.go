@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -46,8 +47,10 @@ func (s *Service) decide(ctx context.Context, r *storage.Repo, client domain.Cli
 			return nil, nil
 		}
 
-	case !client.Arrested && tx.CounterpartyKind == domain.CounterpartyPerson && !confirmed[tx.Counterparty]:
+	case !client.Arrested && tx.CounterpartyKind == domain.CounterpartyPerson && !confirmed[tx.Counterparty] &&
+		!rule.Paused && client.SavingsBalance < rule.GoalAmount && tx.Amount >= rule.MinIncome:
 		// Перевод от незнакомого физлица: не решаем молча, а спрашиваем «это ваш доход?».
+		// Если откладывать всё равно не будем (пауза, цель достигнута, мелкое поступление) — не спрашиваем.
 		d = domain.Decision{
 			Action: domain.DecisionConfirmIncome, Amount: tx.Amount, Status: domain.DecisionPending,
 			Reason: fmt.Sprintf("Перевод %s от «%s». Это ваш доход?", tx.Amount, tx.Counterparty),
@@ -121,6 +124,17 @@ func (s *Service) schedule(ctx context.Context, r *storage.Repo, d *domain.Decis
 	}
 
 	active, err := r.ActiveQuestion(ctx, d.ClientID)
+	if err == nil && active.ExpiresAt != nil && !now.Before(*active.ExpiresAt) {
+		// Срок ответа вышел, а таймер ещё не успел закрыть вопрос: закрываем сами,
+		// а не объединяем с новым, и смотрим, какой вопрос теперь активный.
+		if err := s.expire(ctx, r, &active, rule, now); err != nil {
+			return err
+		}
+		if err := s.activateNext(ctx, r, d.ClientID, rule, now); err != nil {
+			return err
+		}
+		active, err = r.ActiveQuestion(ctx, d.ClientID)
+	}
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		s.setNotify(d, rule, now, true)
@@ -133,6 +147,12 @@ func (s *Service) schedule(ctx context.Context, r *storage.Repo, d *domain.Decis
 		// Объединяем: один вопрос с общей суммой вместо двух уведомлений подряд.
 		d.Amount += active.Amount
 		d.Options = mergeOptions(active.Options, d.Options)
+		if d.Explanation != nil {
+			// Деньги прошлого поступления ещё на карте и уже учтены в новой безопасной сумме:
+			// больше неё не предлагаем, иначе прошлое поступление посчитаем дважды.
+			d.Amount = min(d.Amount, d.Explanation.SafeAmount)
+			d.Options = capOptions(d.Options, d.Explanation.SafeAmount)
+		}
 		d.Reason = fmt.Sprintf("%s Вместе с прошлым поступлением предлагаем отложить %s.", d.Reason, d.Amount)
 		active.Status = domain.DecisionExpired
 		active.Reason = "Объединён с вопросом по новому поступлению"
@@ -154,6 +174,17 @@ func mergeOptions(a, b []domain.Money) []domain.Money {
 	out := make([]domain.Money, n)
 	for i := range n {
 		out[i] = at(a, i) + at(b, i)
+	}
+	return out
+}
+
+// capOptions ограничивает варианты суммой limit и убирает повторы, которые от этого появились.
+func capOptions(options []domain.Money, limit domain.Money) []domain.Money {
+	out := make([]domain.Money, 0, len(options))
+	for _, o := range options {
+		if o = min(o, limit); !slices.Contains(out, o) {
+			out = append(out, o)
+		}
 	}
 	return out
 }

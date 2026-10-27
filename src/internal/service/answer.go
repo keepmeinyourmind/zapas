@@ -31,13 +31,19 @@ type Answer struct {
 // если время вышло — вопрос закрывается безопасным вариантом, ответ отклоняется.
 func (s *Service) AnswerDecision(ctx context.Context, id string, a Answer) (domain.Decision, error) {
 	var d domain.Decision
+	late := false
 	err := s.store.InTx(ctx, func(r *storage.Repo) error {
+		// Сначала клиент, потом решение — тот же порядок блокировок, что у операций и событий банка.
+		// Решение читаем дважды: без блокировки — узнать клиента, под блокировкой — актуальное.
 		var err error
-		if d, err = r.GetDecisionForUpdate(ctx, id); err != nil {
+		if d, err = r.GetDecision(ctx, id); err != nil {
 			return err
 		}
 		client, err := r.GetClientForUpdate(ctx, d.ClientID)
 		if err != nil {
+			return err
+		}
+		if d, err = r.GetDecisionForUpdate(ctx, id); err != nil {
 			return err
 		}
 		rule, err := r.GetRule(ctx, d.ClientID)
@@ -54,11 +60,13 @@ func (s *Service) AnswerDecision(ctx context.Context, id string, a Answer) (doma
 		case d.Status != domain.DecisionPending || !isQuestion(d):
 			return fmt.Errorf("%w: ответ уже не нужен", domain.ErrDecisionClosed)
 		case d.ExpiresAt != nil && !now.Before(*d.ExpiresAt):
-			// Ответ опоздал: закрываем безопасным вариантом и сообщаем, что сделано.
+			// Ответ опоздал: закрываем безопасным вариантом и активируем следующий вопрос.
+			// Ошибку клиенту вернём после коммита — иначе транзакция откатится и вопрос останется открытым.
+			late = true
 			if err := s.expire(ctx, r, &d, rule, now); err != nil {
 				return err
 			}
-			return fmt.Errorf("%w: время на ответ вышло — %s", domain.ErrDecisionClosed, lowerFirst(d.Reason))
+			return s.activateNext(ctx, r, d.ClientID, rule, now)
 		case client.Arrested:
 			return domain.ErrAccountArrested
 		}
@@ -78,6 +86,9 @@ func (s *Service) AnswerDecision(ctx context.Context, id string, a Answer) (doma
 		}
 		return s.activateNext(ctx, r, d.ClientID, rule, now)
 	})
+	if err == nil && late {
+		err = fmt.Errorf("%w: время на ответ вышло — %s", domain.ErrDecisionClosed, lowerFirst(d.Reason))
+	}
 	return d, err
 }
 
@@ -154,11 +165,20 @@ func (s *Service) ExpireDue(ctx context.Context) ([]domain.Decision, error) {
 	expired := []domain.Decision{}
 	for _, id := range ids {
 		err := s.store.InTx(ctx, func(r *storage.Repo) error {
-			d, err := r.GetDecisionForUpdate(ctx, id)
+			// Порядок блокировок: клиент, потом решение (см. storage.Store.InTx).
+			d, err := r.GetDecision(ctx, id)
 			if err != nil {
 				return err
 			}
-			if d.Status != domain.DecisionPending { // пока ждали блокировку, клиент успел ответить
+			if _, err := r.GetClientForUpdate(ctx, d.ClientID); err != nil {
+				return err
+			}
+			if d, err = r.GetDecisionForUpdate(ctx, id); err != nil {
+				return err
+			}
+			// Пока ждали блокировку, клиент мог ответить. Ответ «да» на «это ваш доход?»
+			// превращает вопрос в новый вопрос о сумме с новым сроком — его не закрываем.
+			if d.Status != domain.DecisionPending || d.ExpiresAt == nil || now.Before(*d.ExpiresAt) {
 				return nil
 			}
 			rule, err := r.GetRule(ctx, d.ClientID)
@@ -184,7 +204,7 @@ func (s *Service) expire(ctx context.Context, r *storage.Repo, d *domain.Decisio
 	if d.Action == domain.DecisionConfirmIncome {
 		d.Reason = "Вы не ответили — считаем, что это не доход, и не откладываем"
 	} else {
-		d.Reason = "Вы не ответили за 24 часа — в этот раз не откладываем"
+		d.Reason = "Вы не ответили вовремя — в этот раз не откладываем"
 	}
 	return r.UpdateDecision(ctx, *d, nil)
 }

@@ -33,6 +33,9 @@ func New(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
 func (s *Store) Read() *Repo { return &Repo{db: s.pool} }
 
 // InTx выполняет fn в одной транзакции: ошибка → откат, иначе коммит.
+//
+// Порядок блокировок везде один: сначала строка клиента (GetClientForUpdate или UPDATE clients),
+// потом строки его решений. Иначе две транзакции ждут друг друга — взаимная блокировка (deadlock).
 func (s *Store) InTx(ctx context.Context, fn func(r *Repo) error) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
