@@ -5,6 +5,7 @@ package engine
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
@@ -38,29 +39,99 @@ func skip(reason string) domain.Decision {
 	return domain.Decision{Action: domain.DecisionSkip, Status: domain.DecisionSkipped, Reason: reason}
 }
 
+// explain — расшифровка для клиента: сколько на карте, какие траты впереди, сколько остаётся.
+func explain(in Input, cfg Config, safe, amount domain.Money) *domain.Explanation {
+	e := &domain.Explanation{
+		CardBalance:   in.Client.CardBalance,
+		UpcomingTotal: in.Upcoming,
+		Buffer:        cfg.Buffer,
+		SafeAmount:    safe,
+		Until:         in.Profile.NextIncomeAt,
+	}
+
+	for _, due := range in.Dues {
+		item := domain.UpcomingItem{Title: due.Counterparty, Amount: due.Amount}
+		if !due.At.IsZero() {
+			at := due.At
+			item.At = &at
+		}
+		e.Upcoming = append(e.Upcoming, item)
+	}
+
+	if in.Spending > 0 {
+		e.Upcoming = append(e.Upcoming, domain.UpcomingItem{
+			Title: "Повседневные траты", Amount: in.Spending, PerDay: in.Profile.DailySpending, Days: in.Days,
+		})
+	}
+
+	e.Summary = summary(e, amount, in.Rule.MinTransfer)
+	return e
+}
+
+func summary(e *domain.Explanation, amount, minTransfer domain.Money) string {
+	var lines []string
+
+	if amount >= minTransfer {
+		lines = append(lines, fmt.Sprintf("Можно безопасно отложить до %s", e.SafeAmount))
+	} else {
+		lines = append(lines, "Сейчас безопасно отложить нечего")
+	}
+
+	lines = append(lines, fmt.Sprintf("До %s предстоят траты на %s:", ruDate(e.Until), e.UpcomingTotal))
+	for _, it := range e.Upcoming {
+		switch {
+		case it.At != nil:
+			lines = append(lines, fmt.Sprintf("• %s — %s, %s", it.Title, it.Amount.String(), ruDate(*it.At)))
+		case it.Days > 0:
+			lines = append(lines, fmt.Sprintf("• %s — %s (≈ %s в день × %d дн.)", it.Title, it.Amount, it.PerDay, it.Days))
+		default:
+			lines = append(lines, fmt.Sprintf("• %s — %s", it.Title, it.Amount))
+		}
+	}
+
+	calc := fmt.Sprintf("На карте %s − %s", e.CardBalance, e.UpcomingTotal)
+	if e.Buffer > 0 {
+		calc += fmt.Sprintf(" − неприкосновенный остаток %s", e.Buffer)
+	}
+	lines = append(lines, fmt.Sprintf("%s = %s.", calc, e.SafeAmount))
+
+	return strings.Join(lines, "\n")
+}
+
+var ruMonths = [...]string{"января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"}
+
+func ruDate(t time.Time) string {
+	return fmt.Sprintf("%d %s", t.Day(), ruMonths[t.Month()-1])
+}
+
 // Decide принимает решение по поступлению.
 // Заполняет Action, Amount, Options, Reason, Status. ID, время, notify_at и expires_at ставит сервис.
 func Decide(in Input, cfg Config) domain.Decision {
 	// 1. Арест: по закону переводы со счёта невозможны — это важнее всего остального.
-	// 2. Клиент сам поставил копилку на паузу.
-	// 3. Цель уже накоплена.
-	// 4. Классификатор сказал, что это не доход.
-	// 5. Клиент просил не трогать маленькие поступления.
 	if in.Client.Arrested {
 		return skip("Счёт арестован, переводы невозможны")
 	}
+
+	// 2. Клиент сам поставил копилку на паузу.
 	if in.Rule.Paused {
 		return skip("Копилка на паузе")
 	}
+
+	// 3. Цель уже накоплена.
 	if in.Client.SavingsBalance >= in.Rule.GoalAmount {
 		return skip("Цель достигнута - поздравляем!")
 	}
+
 	if in.Client.Mode == domain.ModeSimple {
 		return decideSimple(in)
 	}
+
+	// 4. Классификатор сказал, что это не доход.
 	if !in.Kind.IsIncome() {
 		return skip("Это поступление - не доход, его не откладываем")
 	}
+
+	// 5. Клиент просил не трогать маленькие поступления.
 	if in.Tx.Amount < in.Rule.MinIncome {
 		return skip(fmt.Sprintf("Поступления меньше %s не трогаем", in.Rule.MinIncome))
 	}
@@ -73,6 +144,13 @@ func Decide(in Input, cfg Config) domain.Decision {
 	want := in.Tx.Amount.Share(in.Rule.SavePercent) // сколько клиент хочет откладывать
 	amount := min(safe, want)
 
+	d := decideAmount(in, cfg, safe, want, amount)
+	d.Explanation = explain(in, cfg, safe, amount)
+	return d
+}
+
+// decideAmount — решение по сумме, когда безопасная сумма уже посчитана.
+func decideAmount(in Input, cfg Config, safe, want, amount domain.Money) domain.Decision {
 	if amount < in.Rule.MinTransfer {
 		return skip("Впереди обязательные платежи — в этот раз не откладываем")
 	}

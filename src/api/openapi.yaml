@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Запас — умная копилка
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Контракт бэкенда «Запас». Менять только по согласованию с фронтендом.
 
@@ -587,6 +587,56 @@ components:
           format: date-time
           nullable: true
           description: Когда отправить уведомление клиенту; если решение принято в тихие часы — их конец
+        explanation:
+          nullable: true
+          description: |
+            Из чего сложилась сумма: сколько на карте, какие траты впереди, сколько безопасно.
+            Нет у решений, где считать нечего: арест, пауза, цель достигнута, не доход, простой режим.
+          allOf:
+            - $ref: "#/components/schemas/Explanation"
+
+    Explanation:
+      type: object
+      required: [card_balance, upcoming_total, buffer, safe_amount, until, upcoming, summary]
+      properties:
+        card_balance:
+          description: Свои деньги на карте вместе с этим поступлением (кредитный лимит не считается)
+          allOf: [{ $ref: "#/components/schemas/Money" }]
+        upcoming_total:
+          description: Сколько понадобится до следующего дохода
+          allOf: [{ $ref: "#/components/schemas/Money" }]
+        buffer:
+          description: Неприкосновенный остаток
+          allOf: [{ $ref: "#/components/schemas/Money" }]
+        safe_amount:
+          description: Сколько можно отложить безопасно = card_balance − upcoming_total − buffer (не меньше 0)
+          allOf: [{ $ref: "#/components/schemas/Money" }]
+        until: { type: string, format: date-time, description: До какой даты считали — ожидаемый следующий доход }
+        upcoming:
+          type: array
+          description: Предстоящие траты по отдельности
+          items: { $ref: "#/components/schemas/UpcomingItem" }
+        summary:
+          type: string
+          description: То же самое текстом, готово к показу клиенту
+          example: |-
+            Можно безопасно отложить до 1 000 ₽
+            До 19 ноября предстоят траты на 25 000 ₽:
+            • Рассрочка за ноутбук — 6 000 ₽, 25 октября
+            • Повседневные траты — 18 000 ₽ (≈ 600 ₽ в день × 30 дн.)
+            На карте 26 000 ₽ − 25 000 ₽ = 1 000 ₽.
+
+    UpcomingItem:
+      type: object
+      required: [title, amount]
+      properties:
+        title: { type: string, example: Рассрочка за ноутбук }
+        amount: { $ref: "#/components/schemas/Money" }
+        at: { type: string, format: date-time, description: Дата обязательного платежа; нет у повседневных трат }
+        per_day:
+          description: Только у повседневных трат — сколько в день
+          allOf: [{ $ref: "#/components/schemas/Money" }]
+        days: { type: integer, description: Только у повседневных трат — за сколько дней }
 
     AnswerRequest:
       type: object

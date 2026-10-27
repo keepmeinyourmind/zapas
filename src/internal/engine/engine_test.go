@@ -364,3 +364,125 @@ func hasReason(reason, want string) bool {
 	norm := func(s string) string { return strings.ReplaceAll(strings.ToLower(s), "ё", "е") }
 	return strings.Contains(norm(reason), norm(want))
 }
+
+// Расшифровка: из чего сложилась сумма — чтобы клиент видел, на что у него впереди траты.
+func TestDecideExplanation(t *testing.T) {
+	at := func(m time.Month, d int) time.Time { return time.Date(2026, m, d, 7, 0, 0, 0, time.UTC) }
+	// income_drop из демо: пришло 24 000 ₽, на карте 26 000 ₽, впереди 25 000 ₽.
+	drop := func() Input {
+		in := anya()
+		in.Now = at(time.October, 20)
+		in.Tx.Amount, in.Client.CardBalance = domain.FromRubles(24000), domain.FromRubles(26000)
+		in.Profile.NextIncomeAt = at(time.November, 19)
+		in.Profile.DailySpending = domain.FromRubles(600)
+		in.Dues = []domain.Due{
+			{Counterparty: "Рассрочка за ноутбук", Amount: domain.FromRubles(6000), At: at(time.October, 25)},
+			{Counterparty: "Яндекс Плюс", Amount: domain.FromRubles(500), At: at(time.November, 3)},
+			{Counterparty: "МТС", Amount: domain.FromRubles(500), At: at(time.November, 10)},
+		}
+		in.Spending, in.Days = domain.FromRubles(18000), 30
+		in.Upcoming = domain.FromRubles(25000)
+		in.Nearest = &in.Dues[0]
+		return in
+	}
+
+	t.Run("демо income_drop: цифры и список трат", func(t *testing.T) {
+		got := Decide(drop(), cfg).Explanation
+		if got == nil {
+			t.Fatal("у решения нет расшифровки")
+		}
+		if got.CardBalance != domain.FromRubles(26000) || got.UpcomingTotal != domain.FromRubles(25000) ||
+			got.SafeAmount != domain.FromRubles(1000) || got.Buffer != 0 {
+			t.Errorf("на карте %v, впереди %v, буфер %v, безопасно %v; want 26 000, 25 000, 0, 1 000",
+				got.CardBalance, got.UpcomingTotal, got.Buffer, got.SafeAmount)
+		}
+		if !got.Until.Equal(at(time.November, 19)) {
+			t.Errorf("считали до %s, want до 19.11 — следующий доход", got.Until.Format("02.01"))
+		}
+
+		want := []domain.UpcomingItem{
+			{Title: "Рассрочка за ноутбук", Amount: domain.FromRubles(6000)},
+			{Title: "Яндекс Плюс", Amount: domain.FromRubles(500)},
+			{Title: "МТС", Amount: domain.FromRubles(500)},
+			{Title: "Повседневные траты", Amount: domain.FromRubles(18000), PerDay: domain.FromRubles(600), Days: 30},
+		}
+		if len(got.Upcoming) != len(want) {
+			t.Fatalf("трат в списке %d, want %d: %+v", len(got.Upcoming), len(want), got.Upcoming)
+		}
+		for i, w := range want {
+			g := got.Upcoming[i]
+			if g.Title != w.Title || g.Amount != w.Amount || g.PerDay != w.PerDay || g.Days != w.Days {
+				t.Errorf("трата %d = %+v, want %+v", i, g, w)
+			}
+		}
+		if g := got.Upcoming[0]; g.At == nil || !g.At.Equal(at(time.October, 25)) {
+			t.Errorf("у платежа должна быть дата 25.10, получено %v", g.At)
+		}
+		if got.Upcoming[3].At != nil {
+			t.Error("у повседневных трат нет одной даты")
+		}
+
+		for _, phrase := range []string{
+			"можно безопасно отложить до 1 000 ₽",
+			"до 19 ноября предстоят траты на 25 000 ₽",
+			"рассрочка за ноутбук — 6 000 ₽, 25 октября",
+			"мтс — 500 ₽, 10 ноября",
+			"повседневные траты — 18 000 ₽ (≈ 600 ₽ в день × 30 дн.)",
+			"на карте 26 000 ₽ − 25 000 ₽ = 1 000 ₽",
+		} {
+			if !hasReason(got.Summary, phrase) {
+				t.Errorf("в тексте нет %q:\n%s", phrase, got.Summary)
+			}
+		}
+	})
+
+	t.Run("арифметика сходится: безопасно — это не сколько откладываем, а сколько можно", func(t *testing.T) {
+		in := drop()
+		in.Tx.Amount, in.Client.CardBalance = domain.FromRubles(30000), domain.FromRubles(32000) // как в stable
+		got := Decide(in, cfg)
+		if got.Action != domain.DecisionAuto || got.Amount != domain.FromRubles(3000) || got.Explanation == nil {
+			t.Fatalf("Decide() = %s %v, want auto 3 000 ₽ с расшифровкой", got.Action, got.Amount)
+		}
+		e := got.Explanation
+		if e.SafeAmount != e.CardBalance-e.UpcomingTotal-e.Buffer {
+			t.Errorf("на карте %v − впереди %v − буфер %v ≠ безопасно %v", e.CardBalance, e.UpcomingTotal, e.Buffer, e.SafeAmount)
+		}
+		if !hasReason(e.Summary, "можно безопасно отложить до 7 000 ₽") || !hasReason(e.Summary, "= 7 000 ₽") {
+			t.Errorf("в тексте должна быть безопасная сумма 7 000 ₽:\n%s", e.Summary)
+		}
+	})
+
+	t.Run("пропуск из-за платежей — тоже объясняем", func(t *testing.T) {
+		in := drop()
+		in.Upcoming = domain.FromRubles(30000) // больше, чем на карте
+		got := Decide(in, cfg)
+		if got.Action != domain.DecisionSkip || got.Explanation == nil {
+			t.Fatalf("Decide() = %s, расшифровка %v; want skip с расшифровкой", got.Action, got.Explanation)
+		}
+		if got.Explanation.SafeAmount != 0 || !hasReason(got.Explanation.Summary, "сейчас безопасно отложить нечего") {
+			t.Errorf("безопасно %v, текст:\n%s", got.Explanation.SafeAmount, got.Explanation.Summary)
+		}
+	})
+
+	t.Run("буфер виден в расчёте", func(t *testing.T) {
+		got := Decide(drop(), Config{DropPct: 15, RaisePct: 15, Buffer: domain.FromRubles(500)}).Explanation
+		if got == nil || got.SafeAmount != domain.FromRubles(500) || !hasReason(got.Summary, "− неприкосновенный остаток 500 ₽ = 500 ₽") {
+			t.Errorf("расшифровка с буфером: %+v", got)
+		}
+	})
+
+	t.Run("арест, пауза, не доход, простой режим — считать нечего, расшифровки нет", func(t *testing.T) {
+		for _, edit := range []func(in *Input){
+			func(in *Input) { in.Client.Arrested = true },
+			func(in *Input) { in.Rule.Paused = true },
+			func(in *Input) { in.Kind = domain.IncomeNone },
+			func(in *Input) { in.Client.Mode = domain.ModeSimple },
+		} {
+			in := drop()
+			edit(&in)
+			if got := Decide(in, cfg); got.Explanation != nil {
+				t.Errorf("%s: расшифровки быть не должно, а есть: %s", got.Reason, got.Explanation.Summary)
+			}
+		}
+	})
+}
