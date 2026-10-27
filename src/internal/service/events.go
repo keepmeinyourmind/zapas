@@ -48,15 +48,16 @@ func (s *Service) ProcessAccountEvent(ctx context.Context, e domain.AccountEvent
 		}
 		st = AccountState{ClientID: c.ID, Arrested: c.Arrested}
 		if inserted && c.Arrested {
-			return s.closeQuestions(ctx, r, c.ID) // под арестом отвечать на вопросы бессмысленно
+			return s.closeQuestions(ctx, r, c.ID, "Счёт арестован — вопрос закрыт, переводы невозможны") // под арестом отвечать на вопросы бессмысленно
 		}
 		return nil
 	})
 	return st, created, err
 }
 
-// closeQuestions закрывает все открытые и ожидающие вопросы клиента.
-func (s *Service) closeQuestions(ctx context.Context, r *storage.Repo, clientID string) error {
+// closeQuestions закрывает все открытые и ожидающие вопросы клиента с причиной reason.
+// Вызывать под блокировкой клиента: порядок «клиент → решения».
+func (s *Service) closeQuestions(ctx context.Context, r *storage.Repo, clientID, reason string) error {
 	ids, err := r.OpenQuestionIDs(ctx, clientID)
 	if err != nil {
 		return err
@@ -67,7 +68,7 @@ func (s *Service) closeQuestions(ctx context.Context, r *storage.Repo, clientID 
 			return err
 		}
 		d.Status = domain.DecisionExpired
-		d.Reason = "Счёт арестован — вопрос закрыт, переводы невозможны"
+		d.Reason = reason
 		d.ExpiresAt = nil
 		if err := r.UpdateDecision(ctx, d, nil); err != nil {
 			return err

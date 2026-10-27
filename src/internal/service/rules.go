@@ -66,10 +66,15 @@ type RulePatch struct {
 func (s *Service) PatchRule(ctx context.Context, clientID string, p RulePatch) (domain.SavingsRule, error) {
 	var rule domain.SavingsRule
 	err := s.store.InTx(ctx, func(r *storage.Repo) error {
+		// Сначала клиент: при паузе закрываем его вопросы, а порядок блокировок — «клиент → решения».
+		if _, err := r.GetClientForUpdate(ctx, clientID); err != nil {
+			return err
+		}
 		var err error
 		if rule, err = r.GetRuleForUpdate(ctx, clientID); err != nil {
 			return err
 		}
+		wasPaused := rule.Paused
 		if p.Paused != nil {
 			if rule.Paused && !*p.Paused { // снять паузу можно только с одобренной анкетой
 				eligible, _, err := r.OnboardingStatus(ctx, clientID)
@@ -97,7 +102,13 @@ func (s *Service) PatchRule(ctx context.Context, clientID string, p RulePatch) (
 		if err := validateRule(&rule); err != nil {
 			return err
 		}
-		return r.UpsertRule(ctx, rule)
+		if err := r.UpsertRule(ctx, rule); err != nil {
+			return err
+		}
+		if rule.Paused && !wasPaused {
+			return s.closeQuestions(ctx, r, clientID, "Копилка на паузе — вопрос закрыт")
+		}
+		return nil
 	})
 	return rule, err
 }

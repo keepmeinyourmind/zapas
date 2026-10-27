@@ -238,3 +238,55 @@ func TestAnswerRechecksSafeAmount(t *testing.T) {
 		t.Errorf("копилка %v, статус %s: на карте осталось 2 000 ₽ при тратах 4 000 ₽ в день — откладывать нельзя", savings, d.Status)
 	}
 }
+
+// Пауза — ручная или после отказа в повторной анкете — закрывает открытые вопросы:
+// ответ «отложить» после паузы не должен переводить деньги.
+func TestPauseClosesQuestions(t *testing.T) {
+	pauses := []struct {
+		name  string
+		pause func(t *testing.T, s *Service)
+	}{
+		{"клиент поставил копилку на паузу", func(t *testing.T, s *Service) {
+			paused := true
+			if _, err := s.PatchRule(context.Background(), "anya", RulePatch{Paused: &paused}); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"повторная анкета не одобрена", func(t *testing.T, s *Service) {
+			res, err := s.SubmitOnboarding(context.Background(), domain.OnboardingForm{
+				ClientID: "anya", DataConsent: true, AnalysisConsent: true,
+				BirthDate:     time.Date(2006, 3, 15, 0, 0, 0, 0, time.UTC),
+				MonthlyIncome: domain.FromRubles(20000), IncomeType: domain.IncomeTypeMixed,
+				IncomeStability: domain.StabilityIrregular, IncomeMonths: 8,
+				MonthlyPayments: domain.FromRubles(20000),
+			})
+			if err != nil || res.Eligible {
+				t.Fatalf("анкета: %v %+v, want не одобрена", err, res)
+			}
+		}},
+	}
+	for _, p := range pauses {
+		t.Run(p.name, func(t *testing.T) {
+			s, store, _ := testService(t)
+			subscribe(t, s)
+			ctx := context.Background()
+			res, _, err := s.ProcessTransaction(ctx, incoming("t-salary", "ООО Ромашка", domain.CounterpartyLegal, 30000))
+			if err != nil || res.Decision == nil || res.Decision.Action != domain.DecisionAsk {
+				t.Fatalf("вопрос о сумме: %v %+v", err, res.Decision)
+			}
+
+			p.pause(t, s)
+
+			if st := decisionStatus(t, s, res.Decision.ID); st != domain.DecisionExpired {
+				t.Errorf("вопрос после паузы: %s, want expired", st)
+			}
+			_, err = s.AnswerDecision(ctx, res.Decision.ID, Answer{Choice: ChoiceAmount, Amount: res.Decision.Amount})
+			if !errors.Is(err, domain.ErrDecisionClosed) {
+				t.Errorf("ответ после паузы: %v, want ErrDecisionClosed", err)
+			}
+			if _, savings := balances(t, store); savings != 0 {
+				t.Errorf("копилка %v после паузы, want 0", savings)
+			}
+		})
+	}
+}

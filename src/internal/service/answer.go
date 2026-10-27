@@ -69,6 +69,8 @@ func (s *Service) AnswerDecision(ctx context.Context, id string, a Answer) (doma
 			return s.activateNext(ctx, r, d.ClientID, rule, now)
 		case client.Arrested:
 			return domain.ErrAccountArrested
+		case rule.Paused: // вопросы закрываются при паузе; это защита на случай гонки
+			return fmt.Errorf("%w: копилка на паузе", domain.ErrDecisionClosed)
 		}
 
 		switch d.Action {

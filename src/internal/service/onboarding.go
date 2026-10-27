@@ -25,8 +25,17 @@ func (s *Service) SubmitOnboarding(ctx context.Context, f domain.OnboardingForm)
 			return err
 		}
 		// Копилка уже подключена: обновляем доход для холодного старта, а без одобрения — пауза.
+		if _, err := r.GetClientForUpdate(ctx, f.ClientID); err != nil {
+			return err
+		}
 		if err := r.UpdateRuleAfterOnboarding(ctx, f.ClientID, f.MonthlyIncome, res.Eligible); err != nil {
 			return err
+		}
+		if !res.Eligible {
+			reason := "Копилка на паузе: по новой анкете откладывать небезопасно — вопрос закрыт"
+			if err := s.closeQuestions(ctx, r, f.ClientID, reason); err != nil {
+				return err
+			}
 		}
 		return r.SetMode(ctx, f.ClientID, res.Mode)
 	})
