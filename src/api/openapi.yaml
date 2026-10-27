@@ -1,13 +1,17 @@
 openapi: 3.0.3
 info:
   title: Запас — умная копилка
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Контракт бэкенда «Запас». Менять только по согласованию с фронтендом.
 
     - Все суммы — **целые числа в копейках** (3000 ₽ = `300000`).
     - Время — RFC 3339 (`2026-10-25T10:00:00Z`).
     - Тексты `reason` на русском, готовы к показу клиенту.
+
+    Изменения 0.5.0: 409 на чужой или изменённый `id` транзакции и снятия;
+    неизвестные `type` и `counterparty_kind` — 400; `explanation.upcoming` всегда массив;
+    `min_transfer` не меньше 10000; анкета с отказом ставит копилку на паузу.
 servers:
   - url: http://localhost:8080
 
@@ -137,15 +141,22 @@ paths:
               schema: { $ref: "#/components/schemas/SavingsRule" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Снять паузу нельзя — по последней анкете копилка недоступна
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /api/transactions:
     post:
       tags: [transactions]
       summary: Принять транзакцию по карте
       description: |
+        Только для систем банка (в пилоте — с авторизацией сервиса, не клиента).
         Идемпотентно по `id`: повторная отправка той же транзакции не создаёт
-        второго решения и второго перевода. Ответ содержит решение, если
-        поступление признано доходом, и `null` в остальных случаях.
+        второго решения и второго перевода. Тот же `id` с другим клиентом, суммой
+        или типом — 409. Кредит (`type: loan`) не увеличивает `card_balance`:
+        это не свои деньги клиента.
       requestBody:
         required: true
         content:
@@ -172,6 +183,7 @@ paths:
               schema: { $ref: "#/components/schemas/TransactionResult" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/IDConflict" }
 
   /api/clients/{id}/transactions:
     parameters:
@@ -215,8 +227,9 @@ paths:
       tags: [rule]
       summary: Снять деньги из копилки на карту
       description: |
-        Идемпотентно по `id`: повторный запрос с тем же `id` ничего не меняет.
-        Больше, чем в копилке, снять нельзя (400). Под арестом — 409.
+        Идемпотентно по `id`: повторный запрос с тем же `id` и той же суммой ничего не меняет
+        (200, в том числе после ареста). Тот же `id` с другой суммой или у другого клиента — 409.
+        Больше, чем в копилке, снять нельзя (400). Новое снятие под арестом — 409.
       requestBody:
         required: true
         content:
@@ -401,6 +414,7 @@ paths:
       description: |
         Детерминированно, одинаковый сценарий всегда даёт одинаковый результат.
         Время сервиса фиксируется на дате события (20.10.2026, 10:00 МСК); `advance-time` сдвигает его дальше.
+        Время остаётся зафиксированным для всего сервера до перезапуска.
       responses:
         "200":
           description: Сценарий выполнен
@@ -468,6 +482,12 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
           example: { error: "Сначала заполните анкету: без неё копилку подключить нельзя" }
+    IDConflict:
+      description: Операция с таким `id` уже есть — с другим клиентом или другими данными
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: Операция с таким id уже есть — с другими данными }
     NotFound:
       description: Не найдено
       content:
@@ -587,14 +607,14 @@ components:
           allOf:
             - $ref: "#/components/schemas/Money"
         min_transfer:
-          description: Минимальный перевод, по умолчанию 10000 (100 ₽)
+          description: Минимальный перевод, по умолчанию и не меньше 10000 (100 ₽)
           allOf:
             - $ref: "#/components/schemas/Money"
         declared_income:
           description: Примерный месячный доход из анкеты (для клиента без истории)
           allOf:
             - $ref: "#/components/schemas/Money"
-        paused: { type: boolean, default: false }
+        paused: { type: boolean, default: false, description: Ставится сама, если повторная анкета дала отказ }
         quiet_from: { type: string, pattern: "^\\d{2}:\\d{2}$", default: "23:00", description: Тихие часы — с какого времени не беспокоить }
         quiet_to: { type: string, pattern: "^\\d{2}:\\d{2}$", default: "09:00", description: Тихие часы — до какого времени }
         timezone: { type: string, default: Europe/Moscow, description: Часовой пояс клиента (IANA) }
@@ -636,7 +656,11 @@ components:
         income_kind: { $ref: "#/components/schemas/IncomeKind" }
         decision:
           nullable: true
-          description: "`null`, если поступление не доход"
+          description: |
+            `null`, если решения нет: не входящая операция, копилка не подключена или не доход.
+            Перевод от незнакомого физлица — вопрос `confirm_income` («это ваш доход?»),
+            кроме случаев, когда откладывать всё равно не будем (пауза, цель, меньше `min_income`).
+            В простом режиме решение по каждому входящему поступлению, кроме своих переводов и денег банка.
           allOf:
             - $ref: "#/components/schemas/Decision"
 
@@ -663,7 +687,7 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: Только для `pending`; через 24 часа после `notify_at` срабатывает безопасный вариант
+          description: Только для `pending`; через 24 часа после `notify_at` срабатывает безопасный вариант. Ответ на сумму переводит не больше, чем безопасно на момент ответа
         notify_at:
           type: string
           format: date-time
@@ -696,7 +720,7 @@ components:
         until: { type: string, format: date-time, description: До какой даты считали — ожидаемый следующий доход }
         upcoming:
           type: array
-          description: Предстоящие траты по отдельности
+          description: Предстоящие траты по отдельности; всегда массив, пустой — если трат нет
           items: { $ref: "#/components/schemas/UpcomingItem" }
         summary:
           type: string
