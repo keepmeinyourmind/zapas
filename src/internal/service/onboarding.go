@@ -24,6 +24,10 @@ func (s *Service) SubmitOnboarding(ctx context.Context, f domain.OnboardingForm)
 		if err := r.UpsertOnboarding(ctx, f, res, now); err != nil {
 			return err
 		}
+		// Копилка уже подключена: обновляем доход для холодного старта, а без одобрения — пауза.
+		if err := r.UpdateRuleAfterOnboarding(ctx, f.ClientID, f.MonthlyIncome, res.Eligible); err != nil {
+			return err
+		}
 		return r.SetMode(ctx, f.ClientID, res.Mode)
 	})
 	return res, err

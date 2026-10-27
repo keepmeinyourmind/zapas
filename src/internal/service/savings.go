@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -24,12 +25,25 @@ func (s *Service) Withdraw(ctx context.Context, clientID, id string, amount doma
 		if err != nil {
 			return err
 		}
+		// Сначала повтор: снятие, которое уже прошло, остаётся успешным и после ареста.
+		owner, prev, err := r.GetWithdrawal(ctx, id)
+		switch {
+		case err == nil && (owner != clientID || prev != amount):
+			return domain.ErrIDConflict // id уже занят другим клиентом или другой суммой
+		case err == nil:
+			return nil // повтор: деньги второй раз не двигаем
+		case !errors.Is(err, domain.ErrNotFound):
+			return err
+		}
 		if c.Arrested {
 			return domain.ErrAccountArrested
 		}
 		inserted, err := r.InsertWithdrawal(ctx, id, clientID, amount, s.now())
-		if err != nil || !inserted {
-			return err // повтор: деньги второй раз не двигаем
+		if err != nil {
+			return err
+		}
+		if !inserted { // id успел занять другой клиент: его клиентская блокировка — не наша
+			return domain.ErrIDConflict
 		}
 		if amount > c.SavingsBalance {
 			return domain.ValidationError(fmt.Sprintf("В копилке только %s", c.SavingsBalance))

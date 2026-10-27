@@ -119,6 +119,8 @@ func (r SavingsRule) Validate() error {
 		return fmt.Errorf("Процент должен быть от 1 до %d", MaxPercent)
 	case r.MinIncome < 0 || r.MinTransfer < 0 || r.DeclaredIncome < 0:
 		return errors.New("Суммы не могут быть отрицательными")
+	case r.MinTransfer < DefaultMinTransfer:
+		return errors.New("Минимальный перевод — не меньше 100 ₽")
 	}
 	return nil
 }

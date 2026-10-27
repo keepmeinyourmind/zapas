@@ -10,11 +10,21 @@ import (
 )
 
 func (r *Repo) GetRule(ctx context.Context, clientID string) (domain.SavingsRule, error) {
+	return r.getRule(ctx, clientID, "")
+}
+
+// GetRuleForUpdate — правило с блокировкой строки до конца транзакции: параллельные
+// изменения правила идут по очереди и не затирают друг друга.
+func (r *Repo) GetRuleForUpdate(ctx context.Context, clientID string) (domain.SavingsRule, error) {
+	return r.getRule(ctx, clientID, " FOR UPDATE")
+}
+
+func (r *Repo) getRule(ctx context.Context, clientID, lock string) (domain.SavingsRule, error) {
 	var rule domain.SavingsRule
 	err := r.db.QueryRow(ctx, `
 		SELECT client_id, goal_name, goal_amount, term_months, save_percent,
 		       min_income, min_transfer, declared_income, paused, quiet_from, quiet_to, timezone
-		FROM savings_rules WHERE client_id = $1`, clientID,
+		FROM savings_rules WHERE client_id = $1`+lock, clientID,
 	).Scan(&rule.ClientID, &rule.GoalName, &rule.GoalAmount, &rule.TermMonths, &rule.SavePercent,
 		&rule.MinIncome, &rule.MinTransfer, &rule.DeclaredIncome, &rule.Paused,
 		&rule.QuietFrom, &rule.QuietTo, &rule.Timezone)
@@ -22,6 +32,15 @@ func (r *Repo) GetRule(ctx context.Context, clientID string) (domain.SavingsRule
 		return rule, domain.ErrNotFound
 	}
 	return rule, err
+}
+
+// UpdateRuleAfterOnboarding — после повторной анкеты: новый заявленный доход,
+// а если анкета не одобрена — пауза. Правила нет — ничего не делает.
+func (r *Repo) UpdateRuleAfterOnboarding(ctx context.Context, clientID string, income domain.Money, eligible bool) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE savings_rules SET declared_income = $2, paused = paused OR NOT $3, updated_at = now()
+		WHERE client_id = $1`, clientID, income, eligible)
+	return err
 }
 
 // UpsertRule создаёт правило или заменяет существующее.

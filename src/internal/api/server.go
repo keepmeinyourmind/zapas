@@ -74,7 +74,8 @@ func (s *Server) writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, domain.ErrNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 	case errors.Is(err, domain.ErrDecisionClosed), errors.Is(err, domain.ErrOnboardingRequired),
-		errors.Is(err, domain.ErrNotEligible), errors.Is(err, domain.ErrAccountArrested):
+		errors.Is(err, domain.ErrNotEligible), errors.Is(err, domain.ErrAccountArrested),
+		errors.Is(err, domain.ErrIDConflict):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 	default:
 		s.log.Error("внутренняя ошибка", "err", err)

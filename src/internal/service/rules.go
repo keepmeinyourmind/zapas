@@ -67,10 +67,19 @@ func (s *Service) PatchRule(ctx context.Context, clientID string, p RulePatch) (
 	var rule domain.SavingsRule
 	err := s.store.InTx(ctx, func(r *storage.Repo) error {
 		var err error
-		if rule, err = r.GetRule(ctx, clientID); err != nil {
+		if rule, err = r.GetRuleForUpdate(ctx, clientID); err != nil {
 			return err
 		}
 		if p.Paused != nil {
+			if rule.Paused && !*p.Paused { // снять паузу можно только с одобренной анкетой
+				eligible, _, err := r.OnboardingStatus(ctx, clientID)
+				if err != nil && !errors.Is(err, domain.ErrNotFound) {
+					return err
+				}
+				if !eligible {
+					return domain.ErrNotEligible
+				}
+			}
 			rule.Paused = *p.Paused
 		}
 		if p.SavePercent != nil {

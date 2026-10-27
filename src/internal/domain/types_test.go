@@ -51,6 +51,7 @@ func TestRuleValidate(t *testing.T) {
 		{"процент 0", func(r *SavingsRule) { r.SavePercent = 0 }},
 		{"процент 60", func(r *SavingsRule) { r.SavePercent = 60 }},
 		{"отрицательный порог", func(r *SavingsRule) { r.MinIncome = -1 }},
+		{"минимальный перевод 1 копейка", func(r *SavingsRule) { r.MinTransfer = 1 }},
 	}
 	for _, tt := range broken {
 		t.Run(tt.name, func(t *testing.T) {

@@ -2,7 +2,10 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
 )
@@ -16,6 +19,15 @@ func (r *Repo) InsertWithdrawal(ctx context.Context, id, clientID string, amount
 		return false, err
 	}
 	return tag.RowsAffected() == 1, nil
+}
+
+// GetWithdrawal — кто и сколько снимал по этому id. Нет снятия → domain.ErrNotFound.
+func (r *Repo) GetWithdrawal(ctx context.Context, id string) (clientID string, amount domain.Money, err error) {
+	err = r.db.QueryRow(ctx, `SELECT client_id, amount FROM withdrawals WHERE id = $1`, id).Scan(&clientID, &amount)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", 0, domain.ErrNotFound
+	}
+	return clientID, amount, err
 }
 
 // MoveToCard переводит сумму из копилки на карту.

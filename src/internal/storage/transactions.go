@@ -2,7 +2,10 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
 )
@@ -28,7 +31,11 @@ func (r *Repo) SetIncomeKind(ctx context.Context, txID string, kind domain.Incom
 // GetIncomeKind возвращает метку классификатора уже сохранённой операции.
 func (r *Repo) GetIncomeKind(ctx context.Context, txID string) (domain.IncomeKind, error) {
 	var kind *string
-	if err := r.db.QueryRow(ctx, `SELECT income_kind FROM transactions WHERE id = $1`, txID).Scan(&kind); err != nil {
+	err := r.db.QueryRow(ctx, `SELECT income_kind FROM transactions WHERE id = $1`, txID).Scan(&kind)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", domain.ErrNotFound
+	}
+	if err != nil {
 		return "", err
 	}
 	if kind == nil {
@@ -143,6 +150,9 @@ func (r *Repo) GetTransaction(ctx context.Context, id string) (domain.Transactio
 		SELECT id, client_id, amount, type, counterparty, counterparty_kind, occurred_at
 		FROM transactions WHERE id = $1`, id,
 	).Scan(&t.ID, &t.ClientID, &t.Amount, &t.Type, &t.Counterparty, &t.CounterpartyKind, &t.OccurredAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return t, domain.ErrNotFound
+	}
 	t.OccurredAt = t.OccurredAt.UTC()
 	return t, err
 }

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/keepmeinyourmind/zapas/src/internal/classifier"
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
@@ -15,6 +16,18 @@ type TransactionResult struct {
 	Decision   *domain.Decision  `json:"decision"` // null, если поступление не доход (решения подключим позже)
 }
 
+// Допустимые значения type и counterparty_kind — как в openapi.yaml.
+var (
+	knownTxKinds = map[domain.TxKind]bool{
+		domain.TxKindIncoming: true, domain.TxKindOutgoing: true, domain.TxKindRefund: true,
+		domain.TxKindInternal: true, domain.TxKindLoan: true,
+	}
+	knownCounterpartyKinds = map[domain.CounterpartyKind]bool{
+		domain.CounterpartyLegal: true, domain.CounterpartyPerson: true,
+		domain.CounterpartySelf: true, domain.CounterpartyBank: true,
+	}
+)
+
 func validateTransaction(tx domain.Transaction) error {
 	switch {
 	case tx.ID == "":
@@ -25,6 +38,12 @@ func validateTransaction(tx domain.Transaction) error {
 		return domain.ValidationError("Сумма должна быть больше нуля")
 	case tx.Type == "":
 		return domain.ValidationError("Не указан тип операции")
+	case !knownTxKinds[tx.Type]:
+		return domain.ValidationError(fmt.Sprintf("Неизвестный тип операции %q", tx.Type))
+	case tx.CounterpartyKind == "":
+		return domain.ValidationError("Не указан вид отправителя или получателя")
+	case !knownCounterpartyKinds[tx.CounterpartyKind]:
+		return domain.ValidationError(fmt.Sprintf("Неизвестный вид отправителя или получателя %q", tx.CounterpartyKind))
 	case tx.OccurredAt.IsZero():
 		return domain.ValidationError("Не указано время операции")
 	}
@@ -51,6 +70,15 @@ func (s *Service) ProcessTransaction(ctx context.Context, tx domain.Transaction)
 			return err
 		}
 		if !inserted { // повтор: отдаём то, что решили в первый раз
+			// id глобальный: тот же id с другим клиентом или другими данными — не повтор,
+			// а конфликт. Иначе отдали бы чужое решение.
+			stored, err := r.GetTransaction(ctx, tx.ID)
+			if err != nil {
+				return err
+			}
+			if stored.ClientID != tx.ClientID || stored.Amount != tx.Amount || stored.Type != tx.Type {
+				return domain.ErrIDConflict
+			}
 			if res.IncomeKind, err = r.GetIncomeKind(ctx, tx.ID); err != nil {
 				return err
 			}
@@ -94,8 +122,13 @@ func (s *Service) ProcessTransaction(ctx context.Context, tx domain.Transaction)
 
 // cardDelta — как операция меняет баланс карты.
 func cardDelta(tx domain.Transaction) domain.Money {
-	if tx.Type == domain.TxKindOutgoing {
+	switch tx.Type {
+	case domain.TxKindOutgoing:
 		return -tx.Amount
+	case domain.TxKindLoan:
+		// Кредит — не свои деньги клиента: CardBalance — это свои деньги на карте,
+		// а кредитные в расчёте безопасной суммы не участвуют.
+		return 0
 	}
 	return tx.Amount
 }
