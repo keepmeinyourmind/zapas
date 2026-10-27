@@ -82,7 +82,11 @@ func (s *Service) ListRecurring(ctx context.Context, clientID string) ([]Recurri
 	if err != nil {
 		return nil, err
 	}
-	_, recurring := profile.Build(history, 0, now)
+	plain := make([]domain.Transaction, len(history))
+	for i, tx := range history {
+		plain[i] = tx.Transaction
+	}
+	recurring := profile.DetectRecurring(plain, now)
 
 	out := []RecurringPayment{}
 	for _, p := range recurring {

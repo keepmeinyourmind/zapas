@@ -15,6 +15,7 @@ const (
 	recurringMaxGap   = 35 * day
 	recurringTolerPct = 10 // сумма может отличаться от обычной на ±10%
 	spendingWindow    = 30 // повседневные траты считаем за последние 30 дней
+	spendingMinDays   = 7  // короткую историю делим не меньше чем на неделю
 )
 
 // DetectRecurring находит регулярные списания по истории: один получатель, не меньше 2 раз подряд,
@@ -94,23 +95,39 @@ func allWithin(amounts []domain.Money, typical domain.Money, pct int) bool {
 	return true
 }
 
-// DailySpending — средние повседневные траты в день за последние 30 дней,
-// без регулярных платежей (они учитываются отдельно, по датам).
-func DailySpending(history []domain.Transaction, recurring []domain.RecurringPayment, now time.Time) domain.Money {
-	isRecurring := map[string]bool{}
-	for _, p := range recurring {
-		isRecurring[p.Counterparty] = true
+// DailySpending — средние повседневные траты в день, без обязательных платежей
+// (они учитываются отдельно, по датам). Платёж, который клиент исключил, в mandatory не передают —
+// он считается обычной тратой.
+//
+// Делим на число дней, за которые есть история (от самой ранней операции до now, неполный день — целый),
+// но не меньше 7 и не больше 30: у нового клиента за 2 дня траты на месяц вперёд не делим на 30.
+// Истории нет — 0.
+func DailySpending(history []domain.Transaction, mandatory []domain.RecurringPayment, now time.Time) domain.Money {
+	if len(history) == 0 {
+		return 0
 	}
-	from := now.Add(-spendingWindow * day)
+	isMandatory := map[string]bool{}
+	for _, p := range mandatory {
+		isMandatory[p.Counterparty] = true
+	}
+
+	earliest := now
+	for _, tx := range history {
+		if tx.OccurredAt.Before(earliest) {
+			earliest = tx.OccurredAt
+		}
+	}
+	days := min(max(daysBetween(earliest, now), spendingMinDays), spendingWindow)
+	from := now.Add(-time.Duration(days) * day)
 
 	var total domain.Money
 	for _, tx := range history {
-		if tx.Type != domain.TxKindOutgoing || isRecurring[tx.Counterparty] {
+		if tx.Type != domain.TxKindOutgoing || isMandatory[tx.Counterparty] {
 			continue
 		}
-		if tx.OccurredAt.After(from) && !tx.OccurredAt.After(now) {
+		if !tx.OccurredAt.Before(from) && !tx.OccurredAt.After(now) {
 			total += tx.Amount
 		}
 	}
-	return total / spendingWindow
+	return total / domain.Money(days)
 }

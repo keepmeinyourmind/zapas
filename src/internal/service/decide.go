@@ -98,9 +98,16 @@ func (s *Service) decideIncome(ctx context.Context, r *storage.Repo, client doma
 	if err != nil {
 		return domain.Decision{}, err
 	}
-	// Повседневные траты считаем без всех регулярных платежей, а резервируем деньги только
-	// под обязательные: платёж, который клиент пометил необязательным, не резервируем вовсе.
-	prof, recurring := profile.Build(history, rule.DeclaredIncome, now)
+	// Резервируем деньги только под обязательные платежи. Платёж, который клиент пометил
+	// необязательным, — обычная трата: он входит в повседневные траты, а не в резерв по дате.
+	prof, recurring := profile.Build(history, profile.Options{
+		CurrentTxID: tx.ID, DeclaredIncome: rule.DeclaredIncome, Excluded: excluded,
+	}, now)
+	// Платежи из анкеты — только для холодного старта, пока по истории не найдено ни одного платежа.
+	// Если клиент исключил все найденные, анкета их не заменяет.
+	if len(recurring) > 0 {
+		declaredPayments = 0
+	}
 	up := profile.Upcoming(withoutExcluded(recurring, excluded), declaredPayments, prof.DailySpending, now, prof.NextIncomeAt)
 
 	return engine.Decide(engine.Input{

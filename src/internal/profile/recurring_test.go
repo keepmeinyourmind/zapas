@@ -91,12 +91,33 @@ func TestDetectRecurring(t *testing.T) {
 }
 
 func TestDailySpending(t *testing.T) {
-	h := anyaSpending()
 	now := on(time.October, 20)
-	recurring := DetectRecurring(h, now)
-	// За 30 дней до 20 октября: продукты 1, 8 и 15 октября по 1 200 ₽ (22-го — ещё не было) = 3 600 ₽.
-	// Регулярные (МТС, подписка) и траты раньше 20 сентября не считаются. 3 600 / 30 = 120 ₽ в день.
-	if got := DailySpending(h, recurring, now); got != domain.FromRubles(120) {
-		t.Errorf("DailySpending = %v, want 120 ₽", got)
+	anya := anyaSpending()
+	mts := []domain.Transaction{spend("МТС", 600, on(time.September, 10)), spend("МТС", 600, on(time.October, 10)),
+		spend("Пятёрочка", 2400, on(time.October, 15))}
+
+	tests := []struct {
+		name      string
+		history   []domain.Transaction
+		mandatory []domain.RecurringPayment
+		want      domain.Money
+	}{
+		// За 30 дней до 20 октября: продукты 1, 8 и 15 октября по 1 200 ₽ (22-го — ещё не было) = 3 600 ₽.
+		// Регулярные (МТС, подписка) и траты раньше 20 сентября не считаются. 3 600 / 30 = 120 ₽ в день.
+		{"история Ани за полгода — делим на 30", anya, DetectRecurring(anya, now), domain.FromRubles(120)},
+		{"история 10 дней — делим на 10", []domain.Transaction{
+			spend("Пятёрочка", 1000, on(time.October, 10)), spend("Пятёрочка", 1000, on(time.October, 15)),
+		}, nil, domain.FromRubles(200)},
+		{"история 2 дня — делим на 7", []domain.Transaction{spend("Пятёрочка", 700, on(time.October, 18))}, nil, domain.FromRubles(100)},
+		{"исключённый платёж входит в повседневные траты", mts, nil, domain.FromRubles(100)}, // (600 + 2 400) / 30
+		{"обязательный платёж не входит", mts, DetectRecurring(mts, now), domain.FromRubles(80)},
+		{"нет истории", nil, nil, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := DailySpending(tt.history, tt.mandatory, now); got != tt.want {
+				t.Errorf("DailySpending = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

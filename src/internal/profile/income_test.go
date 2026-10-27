@@ -64,7 +64,7 @@ func TestExpectedIncome(t *testing.T) {
 		income(domain.IncomeSalary, 60000, on(time.January, 25)), // старше 6 месяцев
 		income(domain.IncomeNone, 5000, on(time.October, 1)),     // не доход
 	}
-	got := ExpectedIncome(history, now)
+	got := ExpectedIncome(history, "", now)
 
 	want := map[domain.IncomeKind]domain.Money{
 		domain.IncomeAdvance: domain.FromRubles(11000), // медиана 10 000, 11 000, 12 000
@@ -81,4 +81,26 @@ func TestExpectedIncome(t *testing.T) {
 	if _, ok := got[domain.IncomeNone]; ok {
 		t.Error("«не доход» не должен попадать в ожидаемый доход")
 	}
+}
+
+// Поступление, по которому решаем, не должно влиять на «обычный» доход, с которым его сравнивают:
+// иначе упавший доход тянет медиану вниз и падение выглядит меньше, чем есть.
+func TestExpectedIncomeWithoutCurrent(t *testing.T) {
+	now := on(time.October, 20)
+	prev := income(domain.IncomeSalary, 30000, on(time.September, 20))
+	prev.ID = "sep"
+	cur := income(domain.IncomeSalary, 20000, now)
+	cur.ID = "oct"
+	history := []domain.ClassifiedTransaction{prev, cur}
+
+	t.Run("текущее поступление не входит в медиану", func(t *testing.T) {
+		if got := ExpectedIncome(history, "oct", now)[domain.IncomeSalary]; got != domain.FromRubles(30000) {
+			t.Errorf("обычная зарплата = %v, want 30 000 ₽ (без текущих 20 000 ₽)", got)
+		}
+	})
+	t.Run("без id текущего — считаем по всей истории", func(t *testing.T) {
+		if got := ExpectedIncome(history, "", now)[domain.IncomeSalary]; got != domain.FromRubles(25000) {
+			t.Errorf("обычная зарплата = %v, want 25 000 ₽ — медиана 20 000 и 30 000", got)
+		}
+	})
 }

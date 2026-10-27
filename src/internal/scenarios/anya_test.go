@@ -13,7 +13,7 @@ func TestAnyaNumbers(t *testing.T) {
 	s, _ := Get("income_drop")
 	history := append(s.History, domain.ClassifiedTransaction{Transaction: s.Event, IncomeKind: domain.IncomeSalary})
 
-	p, recurring := profile.Build(history, s.Onboarding.MonthlyIncome, EventAt)
+	p, recurring := profile.Build(history, profile.Options{CurrentTxID: s.Event.ID, DeclaredIncome: s.Onboarding.MonthlyIncome}, EventAt)
 	if p.Trust != domain.TrustLevelHigh {
 		t.Errorf("доверие %d, want High (месяцев с доходом: %d)", p.Trust, p.MonthsOfData)
 	}
