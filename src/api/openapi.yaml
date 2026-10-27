@@ -312,7 +312,7 @@ paths:
         required: true
         schema:
           type: string
-          enum: [stable, income_drop, self_transfer, new_client, income_rise]
+          enum: [stable, income_drop, simple_mode, self_transfer, new_client, income_rise]
     post:
       tags: [demo]
       summary: Сбросить клиента Аню и прогнать сценарий

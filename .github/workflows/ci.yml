@@ -93,6 +93,7 @@ jobs:
           }
           check stable        auto          300000
           check income_drop   ask           100000
+          check simple_mode   auto          240000
           check self_transfer none          0
           check new_client    ask           300000
           check income_rise   suggest_raise 360000

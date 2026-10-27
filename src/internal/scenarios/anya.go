@@ -39,7 +39,8 @@ type Scenario struct {
 //   - на карте до события 2 000 ₽.
 //
 // income_drop: пришло 24 000 ₽ → на карте 26 000 ₽ → безопасно 26 000 − 25 000 = 1 000 ₽.
-// Обычная копилка списала бы 10% = 2 400 ₽, и на рассрочку не хватило бы 1 400 ₽.
+// simple_mode — то же событие, но как у обычной копилки: молча списывает 10% = 2 400 ₽,
+// и на рассрочку не хватает 1 400 ₽.
 var all = map[string]Scenario{
 	"stable": {
 		Name: "stable", Description: "Пришла обычная зарплата 30 000 ₽",
@@ -65,6 +66,11 @@ var all = map[string]Scenario{
 		History: nil, Card: domain.FromRubles(2000), Savings: 0,
 		Onboarding: anyaForm(), Event: salary("new_client", 30000),
 	},
+	"simple_mode": {
+		Name: "simple_mode", Description: "Как обычная копилка: то же, что income_drop, но клиент отказался от анализа",
+		History: anyaHistory(30000), Card: domain.FromRubles(2000), Savings: domain.FromRubles(15000),
+		Onboarding: withoutAnalysis(anyaForm()), Event: salary("simple_mode", 24000),
+	},
 	"income_rise": {
 		Name: "income_rise", Description: "Доход вырос: пришло 36 000 ₽ вместо 30 000",
 		History: anyaHistory(30000), Card: domain.FromRubles(2000), Savings: domain.FromRubles(15000),
@@ -80,7 +86,7 @@ func Get(name string) (Scenario, bool) {
 
 // Names — имена всех сценариев в порядке показа.
 func Names() []string {
-	return []string{"stable", "income_drop", "self_transfer", "new_client", "income_rise"}
+	return []string{"stable", "income_drop", "simple_mode", "self_transfer", "new_client", "income_rise"}
 }
 
 func salary(scenario string, rubles int64) domain.Transaction {
@@ -88,6 +94,12 @@ func salary(scenario string, rubles int64) domain.Transaction {
 		ID: scenario + "-event", Amount: domain.FromRubles(rubles), Type: domain.TxKindIncoming,
 		Counterparty: employer, CounterpartyKind: domain.CounterpartyLegal, OccurredAt: EventAt,
 	}
+}
+
+// withoutAnalysis — та же анкета, но без согласия на анализ доходов: простой режим.
+func withoutAnalysis(f domain.OnboardingForm) domain.OnboardingForm {
+	f.AnalysisConsent = false
+	return f
 }
 
 func anyaForm() domain.OnboardingForm {

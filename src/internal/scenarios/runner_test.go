@@ -45,6 +45,7 @@ func TestScenarios(t *testing.T) {
 	}{
 		{"stable", domain.DecisionAuto, domain.FromRubles(3000), "обычн"},
 		{"income_drop", domain.DecisionAsk, domain.FromRubles(1000), "ниже обычного на 20%"},
+		{"simple_mode", domain.DecisionAuto, domain.FromRubles(2400), "10%"},
 		{"self_transfer", "", 0, ""},
 		{"new_client", domain.DecisionAsk, domain.FromRubles(3000), "мы ещё изучаем ваш доход"},
 		{"income_rise", domain.DecisionSuggestRaise, domain.FromRubles(3600), "вырос на 20%"},
