@@ -16,6 +16,7 @@ import (
 	"github.com/keepmeinyourmind/zapas/src/internal/api"
 	"github.com/keepmeinyourmind/zapas/src/internal/clock"
 	"github.com/keepmeinyourmind/zapas/src/internal/config"
+	"github.com/keepmeinyourmind/zapas/src/internal/scenarios"
 	"github.com/keepmeinyourmind/zapas/src/internal/service"
 	"github.com/keepmeinyourmind/zapas/src/internal/storage"
 )
@@ -51,8 +52,10 @@ func run(log *slog.Logger) error {
 	log.Info("миграции применены")
 
 	clk := clock.New()
-	svc := service.New(storage.New(pool), cfg, clk, log)
-	handler := api.NewServer(svc, clk, cfg.CORSOrigin, log)
+	store := storage.New(pool)
+	svc := service.New(store, cfg, clk, log)
+	runner := scenarios.NewRunner(store, svc, clk)
+	handler := api.NewServer(svc, runner, clk, cfg.CORSOrigin, log)
 
 	// Раз в минуту закрываем вопросы, на которые клиент не ответил за 24 часа.
 	go func() {

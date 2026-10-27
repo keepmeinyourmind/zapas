@@ -8,18 +8,20 @@ import (
 
 	"github.com/keepmeinyourmind/zapas/src/internal/clock"
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
+	"github.com/keepmeinyourmind/zapas/src/internal/scenarios"
 	"github.com/keepmeinyourmind/zapas/src/internal/service"
 )
 
 type Server struct {
 	svc        *service.Service
+	scenarios  *scenarios.Runner
 	clock      *clock.Clock
 	corsOrigin string
 	log        *slog.Logger
 }
 
-func NewServer(svc *service.Service, clk *clock.Clock, corsOrigin string, log *slog.Logger) *Server {
-	return &Server{svc: svc, clock: clk, corsOrigin: corsOrigin, log: log}
+func NewServer(svc *service.Service, runner *scenarios.Runner, clk *clock.Clock, corsOrigin string, log *slog.Logger) *Server {
+	return &Server{svc: svc, scenarios: runner, clock: clk, corsOrigin: corsOrigin, log: log}
 }
 
 // Routes — все маршруты сервера, обёрнутые в CORS.
@@ -36,6 +38,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/decisions/{id}/answer", s.answerDecision)
 	mux.HandleFunc("GET /api/clients/{id}/savings", s.getSavings)
 	mux.HandleFunc("POST /api/debug/advance-time", s.advanceTime)
+	mux.HandleFunc("POST /api/scenarios/{name}/run", s.runScenario)
 	return s.cors(mux)
 }
 

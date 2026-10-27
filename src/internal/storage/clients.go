@@ -55,3 +55,15 @@ func (r *Repo) MoveToSavings(ctx context.Context, id string, amount domain.Money
 		WHERE id = $1`, id, amount)
 	return err
 }
+
+// DeleteClient удаляет клиента и всё связанное (ON DELETE CASCADE) — для сброса демо-сценария.
+func (r *Repo) DeleteClient(ctx context.Context, id string) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM clients WHERE id = $1`, id)
+	return err
+}
+
+// SetBalances задаёт балансы карты и копилки — для демо-сценария.
+func (r *Repo) SetBalances(ctx context.Context, id string, card, savings domain.Money) error {
+	_, err := r.db.Exec(ctx, `UPDATE clients SET card_balance = $2, savings_balance = $3 WHERE id = $1`, id, card, savings)
+	return err
+}

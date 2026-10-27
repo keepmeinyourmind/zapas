@@ -49,6 +49,8 @@ func (s *Service) AnswerDecision(ctx context.Context, id string, a Answer) (doma
 		switch {
 		case d.Status == domain.DecisionQueued:
 			return fmt.Errorf("%w: сначала ответьте на предыдущий вопрос", domain.ErrDecisionClosed)
+		case d.Status == domain.DecisionExpired:
+			return fmt.Errorf("%w: %s", domain.ErrDecisionClosed, lowerFirst(d.Reason))
 		case d.Status != domain.DecisionPending || !isQuestion(d):
 			return fmt.Errorf("%w: ответ уже не нужен", domain.ErrDecisionClosed)
 		case d.ExpiresAt != nil && !now.Before(*d.ExpiresAt):

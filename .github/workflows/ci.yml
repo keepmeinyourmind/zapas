@@ -61,7 +61,7 @@ jobs:
         run: go build ./...
 
       - name: Тесты
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 -p 1 ./... # -p 1: пакеты с БД не мешают друг другу
 
       - name: Миграции применяются к чистой базе
         run: |

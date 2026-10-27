@@ -316,7 +316,9 @@ paths:
     post:
       tags: [demo]
       summary: Сбросить клиента Аню и прогнать сценарий
-      description: Детерминированно, одинаковый сценарий всегда даёт одинаковый результат.
+      description: |
+        Детерминированно, одинаковый сценарий всегда даёт одинаковый результат.
+        Время сервиса фиксируется на дате события (20.10.2026, 10:00 МСК); `advance-time` сдвигает его дальше.
       responses:
         "200":
           description: Сценарий выполнен
@@ -326,10 +328,15 @@ paths:
                 type: object
                 properties:
                   client_id: { type: string, example: anya }
+                  scenario: { type: string, example: income_drop }
+                  description: { type: string, example: "Пришло 24 000 ₽ вместо 30 000, через 5 дней рассрочка" }
+                  income_kind: { $ref: "#/components/schemas/IncomeKind" }
                   decision:
                     nullable: true
+                    description: "`null`, если поступление не доход (сценарий self_transfer)"
                     allOf:
                       - $ref: "#/components/schemas/Decision"
+                  savings: { $ref: "#/components/schemas/Savings" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /api/debug/advance-time:
@@ -353,6 +360,7 @@ paths:
               schema:
                 type: object
                 properties:
+                  now: { type: string, format: date-time, description: Время сервиса после сдвига }
                   expired:
                     type: array
                     items: { $ref: "#/components/schemas/Decision" }
@@ -599,7 +607,14 @@ components:
         client_id: { type: string }
         goal_name: { type: string }
         goal_amount: { $ref: "#/components/schemas/Money" }
-        balance: { $ref: "#/components/schemas/Money" }
+        balance:
+          description: Баланс копилки
+          allOf:
+            - $ref: "#/components/schemas/Money"
+        card_balance:
+          description: Собственные деньги на карте
+          allOf:
+            - $ref: "#/components/schemas/Money"
         progress_percent:
           type: number
           format: float
