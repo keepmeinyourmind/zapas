@@ -185,3 +185,52 @@ func TestIneligibleReonboardingPausesRule(t *testing.T) {
 		t.Errorf("снятие паузы: %v, want ErrNotEligible", err)
 	}
 }
+
+// Как операция меняет свои и кредитные деньги на карте. Траты сначала идут из своих денег:
+// так безопасная сумма считается осторожно, а свои деньги не уходят в минус из-за трат кредита.
+func TestApplyToCard(t *testing.T) {
+	rub := domain.FromRubles
+	tests := []struct {
+		name              string
+		own, loan         domain.Money
+		tx                domain.Transaction
+		wantOwn, wantLoan domain.Money
+	}{
+		{"поступление — свои деньги", rub(1000), 0, tx(domain.TxKindIncoming, 5000), rub(6000), 0},
+		{"кредит — не свои деньги", rub(1000), 0, tx(domain.TxKindLoan, 50000), rub(1000), rub(50000)},
+		{"трата из своих денег", rub(6000), rub(50000), tx(domain.TxKindOutgoing, 5000), rub(1000), rub(50000)},
+		{"трата больше своих — остаток из кредита", rub(1000), rub(50000), tx(domain.TxKindOutgoing, 48000), 0, rub(3000)},
+		{"денег не хватает совсем — свои в минус", rub(1000), rub(2000), tx(domain.TxKindOutgoing, 5000), rub(-2000), 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			own, loan := applyToCard(tt.own, tt.loan, tt.tx)
+			if own != tt.wantOwn || loan != tt.wantLoan {
+				t.Errorf("свои %v, кредит %v; want %v, %v", own, loan, tt.wantOwn, tt.wantLoan)
+			}
+		})
+	}
+}
+
+func tx(kind domain.TxKind, rubles int64) domain.Transaction {
+	return domain.Transaction{Type: kind, Amount: domain.FromRubles(rubles)}
+}
+
+// Кредит, а потом покупка на эти деньги: свои деньги на карте не уходят в минус.
+func TestSpendingLoanMoneyKeepsOwnBalance(t *testing.T) {
+	s, store, _ := testService(t)
+	subscribe(t, s)
+	ctx := context.Background()
+	loan := incoming("t-loan", "ВТБ", domain.CounterpartyBank, 50000)
+	loan.Type = domain.TxKindLoan
+	buy := incoming("t-laptop", "DNS", domain.CounterpartyLegal, 48000)
+	buy.Type = domain.TxKindOutgoing
+	for _, op := range []domain.Transaction{loan, buy} {
+		if _, _, err := s.ProcessTransaction(ctx, op); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if card, _ := balances(t, store); card != 0 {
+		t.Errorf("свои деньги на карте %v, want 0: покупка оплачена кредитом", card)
+	}
+}

@@ -29,8 +29,8 @@ func (r *Repo) GetClientForUpdate(ctx context.Context, id string) (domain.Client
 func (r *Repo) getClient(ctx context.Context, id, lock string) (domain.Client, error) {
 	var c domain.Client
 	err := r.db.QueryRow(ctx,
-		`SELECT id, name, card_balance, credit_limit, savings_balance, mode, arrested FROM clients WHERE id = $1`+lock, id,
-	).Scan(&c.ID, &c.Name, &c.CardBalance, &c.CreditLimit, &c.SavingsBalance, &c.Mode, &c.Arrested)
+		`SELECT id, name, card_balance, loan_funds, credit_limit, savings_balance, mode, arrested FROM clients WHERE id = $1`+lock, id,
+	).Scan(&c.ID, &c.Name, &c.CardBalance, &c.LoanFunds, &c.CreditLimit, &c.SavingsBalance, &c.Mode, &c.Arrested)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, domain.ErrNotFound
 	}
@@ -42,9 +42,9 @@ func (r *Repo) SetMode(ctx context.Context, id string, mode domain.Mode) error {
 	return err
 }
 
-// AddCardBalance меняет баланс карты на delta (поступление — плюс, списание — минус).
-func (r *Repo) AddCardBalance(ctx context.Context, id string, delta domain.Money) error {
-	_, err := r.db.Exec(ctx, `UPDATE clients SET card_balance = card_balance + $2 WHERE id = $1`, id, delta)
+// SetCard задаёт свои и кредитные деньги на карте. Вызывать под блокировкой клиента (GetClientForUpdate).
+func (r *Repo) SetCard(ctx context.Context, id string, own, loan domain.Money) error {
+	_, err := r.db.Exec(ctx, `UPDATE clients SET card_balance = $2, loan_funds = $3 WHERE id = $1`, id, own, loan)
 	return err
 }
 

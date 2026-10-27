@@ -92,11 +92,10 @@ func (s *Service) ProcessTransaction(ctx context.Context, tx domain.Transaction)
 		}
 		created = true
 
-		delta := cardDelta(tx)
-		if err := r.AddCardBalance(ctx, tx.ClientID, delta); err != nil {
+		client.CardBalance, client.LoanFunds = applyToCard(client.CardBalance, client.LoanFunds, tx)
+		if err := r.SetCard(ctx, tx.ClientID, client.CardBalance, client.LoanFunds); err != nil {
 			return err
 		}
-		client.CardBalance += delta
 
 		// В простом режиме клиент не давал согласия на анализ — классификатор не запускаем.
 		res.IncomeKind = domain.IncomeNone
@@ -123,17 +122,22 @@ func (s *Service) ProcessTransaction(ctx context.Context, tx domain.Transaction)
 	return res, created, err
 }
 
-// cardDelta — как операция меняет баланс карты.
-func cardDelta(tx domain.Transaction) domain.Money {
+// applyToCard — как операция меняет свои (own) и кредитные (loan) деньги на карте.
+// Кредит — не свои деньги: в безопасной сумме он не участвует. Траты идут сначала из своих
+// денег (так безопасная сумма считается осторожно), а когда свои кончились — из кредита.
+func applyToCard(own, loan domain.Money, tx domain.Transaction) (domain.Money, domain.Money) {
 	switch tx.Type {
-	case domain.TxKindOutgoing:
-		return -tx.Amount
 	case domain.TxKindLoan:
-		// Кредит — не свои деньги клиента: CardBalance — это свои деньги на карте,
-		// а кредитные в расчёте безопасной суммы не участвуют.
-		return 0
+		return own, loan + tx.Amount
+	case domain.TxKindOutgoing:
+		own -= tx.Amount
+		if own < 0 {
+			fromLoan := min(-own, loan)
+			own, loan = own+fromLoan, loan-fromLoan
+		}
+		return own, loan
 	}
-	return tx.Amount
+	return own + tx.Amount, loan
 }
 
 func (s *Service) ListTransactions(ctx context.Context, clientID string, limit int) ([]domain.ClassifiedTransaction, error) {

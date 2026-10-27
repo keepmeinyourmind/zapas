@@ -5,6 +5,7 @@ type Client struct {
 	ID             string
 	Name           string
 	CardBalance    Money // собственные деньги на карте
+	LoanFunds      Money // кредитные деньги на карте; в расчёте безопасной суммы НЕ участвуют
 	CreditLimit    Money // доступный кредит; в расчёте безопасной суммы НЕ участвует
 	SavingsBalance Money // баланс копилки
 	Mode           Mode  // умный или простой режим
