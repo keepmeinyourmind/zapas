@@ -35,6 +35,7 @@ type Input struct {
 	Days     int          // за сколько дней посчитаны повседневные траты
 }
 
+// skip — решение «пропустить» с причиной для клиента. Статус skipped: переводить нечего.
 func skip(reason string) domain.Decision {
 	return domain.Decision{Action: domain.DecisionSkip, Status: domain.DecisionSkipped, Reason: reason}
 }
@@ -68,20 +69,21 @@ func explain(in Input, cfg Config, safe, amount domain.Money) *domain.Explanatio
 	return e
 }
 
+// summary — расшифровка текстом, как её прочитает клиент.
 func summary(e *domain.Explanation, amount, minTransfer domain.Money) string {
 	var lines []string
 
 	if amount >= minTransfer {
-		lines = append(lines, fmt.Sprintf("Можно безопасно отложить до %s", e.SafeAmount))
+		lines = append(lines, fmt.Sprintf("Можно безопасно отложить до %s.", e.SafeAmount))
 	} else {
-		lines = append(lines, "Сейчас безопасно отложить нечего")
+		lines = append(lines, "Сейчас безопасно отложить нечего.")
 	}
 
 	lines = append(lines, fmt.Sprintf("До %s предстоят траты на %s:", ruDate(e.Until), e.UpcomingTotal))
 	for _, it := range e.Upcoming {
 		switch {
 		case it.At != nil:
-			lines = append(lines, fmt.Sprintf("• %s — %s, %s", it.Title, it.Amount.String(), ruDate(*it.At)))
+			lines = append(lines, fmt.Sprintf("• %s — %s, %s", it.Title, it.Amount, ruDate(*it.At)))
 		case it.Days > 0:
 			lines = append(lines, fmt.Sprintf("• %s — %s (≈ %s в день × %d дн.)", it.Title, it.Amount, it.PerDay, it.Days))
 		default:
@@ -98,8 +100,10 @@ func summary(e *domain.Explanation, amount, minTransfer domain.Money) string {
 	return strings.Join(lines, "\n")
 }
 
+// ruMonths — месяцы в родительном падеже: Go не знает русских названий.
 var ruMonths = [...]string{"января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"}
 
+// ruDate — дата по-русски: «25 октября».
 func ruDate(t time.Time) string {
 	return fmt.Sprintf("%d %s", t.Day(), ruMonths[t.Month()-1])
 }
@@ -119,22 +123,25 @@ func Decide(in Input, cfg Config) domain.Decision {
 
 	// 3. Цель уже накоплена.
 	if in.Client.SavingsBalance >= in.Rule.GoalAmount {
-		return skip("Цель достигнута - поздравляем!")
+		return skip("Цель достигнута — поздравляем!")
 	}
 
+	// Простой режим: клиент отказался от анализа — фиксированный процент, как автопополнение.
+	// Стоит до проверки «не доход»: в простом режиме классификатор не запускается.
 	if in.Client.Mode == domain.ModeSimple {
 		return decideSimple(in)
 	}
 
 	// 4. Классификатор сказал, что это не доход.
 	if !in.Kind.IsIncome() {
-		return skip("Это поступление - не доход, его не откладываем")
+		return skip("Это поступление — не доход, его не откладываем")
 	}
 
 	// 5. Клиент просил не трогать маленькие поступления.
 	if in.Tx.Amount < in.Rule.MinIncome {
 		return skip(fmt.Sprintf("Поступления меньше %s не трогаем", in.Rule.MinIncome))
 	}
+
 	// Безопасная сумма: только свои деньги на карте (кредитный лимит не считаем)
 	// минус всё, что понадобится до следующего дохода, минус неприкосновенный буфер.
 	safe := in.Client.CardBalance - in.Upcoming - cfg.Buffer
@@ -155,8 +162,9 @@ func decideAmount(in Input, cfg Config, safe, want, amount domain.Money) domain.
 		return skip("Впереди обязательные платежи — в этот раз не откладываем")
 	}
 
+	// Холодный старт: истории меньше 3 месяцев — своим выводам ещё не доверяем, спрашиваем.
 	if in.Profile.Trust == domain.TrustLevelLow {
-		return ask(amount, []domain.Money{amount}, fmt.Sprintf("Мы еще изучаем ваш доход. Отложить %s?", amount))
+		return ask(amount, []domain.Money{amount}, fmt.Sprintf("Мы ещё изучаем ваш доход. Отложить %s?", amount))
 	}
 	// Насколько поступление отличается от обычного дохода такого вида, в целых процентах.
 	// Аванс сравниваем с авансами, зарплату — с зарплатами. Не с чем сравнить — считаем обычным.
@@ -217,6 +225,8 @@ func decideSimple(in Input) domain.Decision {
 	return auto(amount, fmt.Sprintf("Откладываем %d%% с поступления", in.Rule.SavePercent))
 }
 
+// ask — решение спросить клиента. options — варианты суммы на выбор; «пропустить» есть всегда.
+// Статус pending: ждём ответа (срок ответа ставит сервис).
 func ask(amount domain.Money, options []domain.Money, reason string) domain.Decision {
 	return domain.Decision{Action: domain.DecisionAsk, Amount: amount, Options: options, Status: domain.DecisionPending, Reason: reason}
 }

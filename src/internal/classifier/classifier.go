@@ -13,7 +13,6 @@ import (
 //	history   — прошлые операции клиента, отсортированы по времени
 //	confirmed — отправители-физлица, которых клиент подтвердил как источник дохода
 func Classify(tx domain.Transaction, history []domain.Transaction, confirmed map[string]bool) domain.IncomeKind {
-
 	// 1. Не входящая операция (перевод из копилки, возврат, кредит, списание) - не доход
 	if tx.Type != domain.TxKindIncoming {
 		return domain.IncomeNone

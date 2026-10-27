@@ -126,9 +126,9 @@ func (r SavingsRule) Validate() error {
 type TrustLevel int
 
 const (
-	TrustLevelLow  TrustLevel = iota // < 3 месяцев истории: низкий уровень доверия, всегда спрашиваем
-	TrustLevelMid                    // 3-5 месяцев: средний уровень доверия
-	TrustLevelHigh                   // > 6 месяцев: высокий уровень доверия
+	TrustLevelLow  TrustLevel = iota // меньше 3 месяцев истории: низкий уровень доверия, всегда спрашиваем
+	TrustLevelMid                    // 3–5 месяцев: средний — спрашиваем, если доход заметно изменился
+	TrustLevelHigh                   // 6+ месяцев: высокий — полная логика
 )
 
 // ------------ Решение по операции ----------------
