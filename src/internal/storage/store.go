@@ -62,3 +62,34 @@ func Migrate(pool *pgxpool.Pool) error {
 	}
 	return nil
 }
+
+// queryStrings — запрос, который возвращает одну текстовую колонку, как слайс.
+func (r *Repo) queryStrings(ctx context.Context, sql string, args ...any) ([]string, error) {
+	rows, err := r.db.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// queryStringSet — то же, но как множество: быстрая проверка «есть ли такое имя».
+func (r *Repo) queryStringSet(ctx context.Context, sql string, args ...any) (map[string]bool, error) {
+	list, err := r.queryStrings(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, v := range list {
+		out[v] = true
+	}
+	return out, nil
+}

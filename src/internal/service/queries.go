@@ -48,15 +48,11 @@ func (s *Service) GetSavings(ctx context.Context, clientID string) (Savings, err
 	if rule.GoalAmount > 0 {
 		sv.ProgressPercent = min(100, float64(c.SavingsBalance)*100/float64(rule.GoalAmount))
 	}
-	pending, err := repo.ListDecisions(ctx, clientID, domain.DecisionPending, 10)
-	if err != nil && !errors.Is(err, domain.ErrNotFound) {
+	switch q, err := repo.PeekActiveQuestion(ctx, clientID); {
+	case err == nil:
+		sv.PendingDecisionID = &q.ID
+	case !errors.Is(err, domain.ErrNotFound):
 		return Savings{}, err
-	}
-	for _, d := range pending {
-		if isQuestion(d) {
-			id := d.ID
-			sv.PendingDecisionID = &id
-		}
 	}
 	return sv, nil
 }

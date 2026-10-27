@@ -163,7 +163,7 @@ func (s *Service) answerConfirm(ctx context.Context, r *storage.Repo, d *domain.
 	d.Status = next.Status
 	switch {
 	case d.Action == domain.DecisionAsk:
-		s.setNotify(d, rule, now, true) // новый вопрос о сумме — снова 24 часа
+		s.setNotify(d, rule, now, true) // новый вопрос о сумме — срок ответа заново
 	case d.Action == domain.DecisionAuto || d.Action == domain.DecisionSuggestRaise:
 		return s.execute(ctx, r, d, rule)
 	}

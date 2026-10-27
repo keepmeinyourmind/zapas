@@ -86,6 +86,10 @@ func (s *Service) decide(ctx context.Context, r *storage.Repo, client domain.Cli
 func (s *Service) decideIncome(ctx context.Context, r *storage.Repo, client domain.Client, tx domain.Transaction,
 	kind domain.IncomeKind, rule domain.SavingsRule, now time.Time) (domain.Decision, error) {
 
+	if client.Mode == domain.ModeSimple {
+		// Простой режим: клиент не давал согласия на анализ — профиль не строим, движку он не нужен.
+		return engine.Decide(engine.Input{Now: now, Tx: tx, Kind: kind, Rule: rule, Client: client}, s.cfg), nil
+	}
 	prof, up, err := s.upcoming(ctx, r, tx.ClientID, tx.ID, rule, now)
 	if err != nil {
 		return domain.Decision{}, err
@@ -228,7 +232,7 @@ func at(xs []domain.Money, i int) domain.Money {
 }
 
 // setNotify — когда уведомить клиента: сразу или после тихих часов. У вопроса срок ответа
-// считается от уведомления: ночью клиент спит, его 24 часа начинаются утром.
+// считается от уведомления: ночью клиент спит, срок ответа начинается утром.
 func (s *Service) setNotify(d *domain.Decision, rule domain.SavingsRule, now time.Time, question bool) {
 	at := now
 	if q, err := notify.ParseQuiet(rule.QuietFrom, rule.QuietTo, rule.Timezone); err == nil {

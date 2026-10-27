@@ -57,7 +57,7 @@ func run(log *slog.Logger) error {
 	runner := scenarios.NewRunner(store, svc, clk)
 	handler := api.NewServer(svc, runner, clk, cfg.CORSOrigin, log)
 
-	// Раз в минуту закрываем вопросы, на которые клиент не ответил за 24 часа.
+	// Раз в минуту закрываем вопросы, на которые клиент не ответил вовремя.
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()

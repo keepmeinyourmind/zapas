@@ -40,20 +40,7 @@ func (r *Repo) MoveToCard(ctx context.Context, clientID string, amount domain.Mo
 
 // ExcludedPayments — платежи, которые клиент пометил как необязательные.
 func (r *Repo) ExcludedPayments(ctx context.Context, clientID string) (map[string]bool, error) {
-	rows, err := r.db.Query(ctx, `SELECT counterparty FROM recurring_exclusions WHERE client_id = $1`, clientID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := map[string]bool{}
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		out[name] = true
-	}
-	return out, rows.Err()
+	return r.queryStringSet(ctx, `SELECT counterparty FROM recurring_exclusions WHERE client_id = $1`, clientID)
 }
 
 // SetPaymentExcluded помечает платёж необязательным (excluded=true) или снимает пометку.

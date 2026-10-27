@@ -111,11 +111,20 @@ func (r *Repo) GetDecisionBySourceTx(ctx context.Context, txID string) (domain.D
 	return scanDecision(r.db.QueryRow(ctx, `SELECT `+decisionColumns+` FROM decisions WHERE source_tx_id = $1`, txID))
 }
 
-// ActiveQuestion — открытый вопрос клиенту (pending), если есть. Нет → domain.ErrNotFound.
+// ActiveQuestion — открытый вопрос клиенту (pending), если есть, с блокировкой. Нет → domain.ErrNotFound.
 func (r *Repo) ActiveQuestion(ctx context.Context, clientID string) (domain.Decision, error) {
+	return r.activeQuestion(ctx, clientID, " FOR UPDATE")
+}
+
+// PeekActiveQuestion — то же без блокировки, для экранов клиента.
+func (r *Repo) PeekActiveQuestion(ctx context.Context, clientID string) (domain.Decision, error) {
+	return r.activeQuestion(ctx, clientID, "")
+}
+
+func (r *Repo) activeQuestion(ctx context.Context, clientID, lock string) (domain.Decision, error) {
 	return scanDecision(r.db.QueryRow(ctx, `SELECT `+decisionColumns+` FROM decisions
 		WHERE client_id = $1 AND status = 'pending' AND action IN ('ask', 'confirm_income')
-		ORDER BY created_at LIMIT 1 FOR UPDATE`, clientID))
+		ORDER BY created_at LIMIT 1`+lock, clientID))
 }
 
 // NextQueued — самый ранний вопрос в очереди. Нет → domain.ErrNotFound.
@@ -146,40 +155,14 @@ func (r *Repo) ListDecisions(ctx context.Context, clientID string, status domain
 
 // ExpiredQuestionIDs — открытые вопросы, на которые время ответа вышло к моменту now.
 func (r *Repo) ExpiredQuestionIDs(ctx context.Context, now time.Time) ([]string, error) {
-	rows, err := r.db.Query(ctx, `SELECT id FROM decisions
+	return r.queryStrings(ctx, `SELECT id FROM decisions
 		WHERE status = 'pending' AND expires_at IS NOT NULL AND expires_at <= $1
 		ORDER BY expires_at, id`, now)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	return ids, rows.Err()
 }
 
 // OpenQuestionIDs — все открытые и ожидающие вопросы клиента (для закрытия при аресте).
 func (r *Repo) OpenQuestionIDs(ctx context.Context, clientID string) ([]string, error) {
-	rows, err := r.db.Query(ctx, `SELECT id FROM decisions
+	return r.queryStrings(ctx, `SELECT id FROM decisions
 		WHERE client_id = $1 AND status IN ('pending', 'queued') AND action IN ('ask', 'confirm_income')
 		ORDER BY created_at, id`, clientID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	return ids, rows.Err()
 }
