@@ -154,17 +154,18 @@ const (
 )
 
 type Decision struct {
-	ID         string         `json:"id"`
-	ClientID   string         `json:"client_id"`
-	SourceTxID string         `json:"source_tx_id"`
-	Action     DecisionAction `json:"action"`
-	Amount     Money          `json:"amount"`
-	Options    []Money        `json:"options,omitempty"`
-	Reason     string         `json:"reason"`
-	Status     DecisionStatus `json:"status"`
-	CreatedAt  time.Time      `json:"created_at"`
-	ExpiresAt  *time.Time     `json:"expires_at,omitempty"`
-	NotifyAt   *time.Time     `json:"notify_at,omitempty"` // когда уведомить клиента с учётом тихих часов
+	ID          string         `json:"id"`
+	ClientID    string         `json:"client_id"`
+	SourceTxID  string         `json:"source_tx_id"`
+	Action      DecisionAction `json:"action"`
+	Amount      Money          `json:"amount"`
+	Options     []Money        `json:"options,omitempty"`
+	Reason      string         `json:"reason"`
+	Status      DecisionStatus `json:"status"`
+	CreatedAt   time.Time      `json:"created_at"`
+	ExpiresAt   *time.Time     `json:"expires_at,omitempty"`
+	NotifyAt    *time.Time     `json:"notify_at,omitempty"`   // когда уведомить клиента с учётом тихих часов
+	Explanation *Explanation   `json:"explanation,omitempty"` // из чего сложилась сумма; нет — если считать нечего
 }
 
 // ---------- Перевод ----------

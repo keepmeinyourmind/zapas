@@ -27,6 +27,11 @@ type Input struct {
 	Profile  domain.Profile // обычный доход, уровень доверия
 	Upcoming domain.Money   // сколько понадобится до следующего дохода (profile.Upcoming)
 	Nearest  *domain.Due    // ближайший обязательный платёж, nil — если нет
+
+	// Для расшифровки клиенту: из чего сложилась сумма Upcoming.
+	Dues     []domain.Due // обязательные платежи до следующего дохода, по датам
+	Spending domain.Money // повседневные траты до следующего дохода
+	Days     int          // за сколько дней посчитаны повседневные траты
 }
 
 func skip(reason string) domain.Decision {

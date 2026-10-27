@@ -35,6 +35,20 @@ func TestAnyaNumbers(t *testing.T) {
 		t.Errorf("ближайший платёж %+v, want рассрочка через 5 дней", up.Nearest)
 	}
 
+	// Расшифровка для клиента: три платежа по датам и 30 дней повседневных трат.
+	wantDues := []string{"Рассрочка за ноутбук 6 000 ₽ 25.10", "Яндекс Плюс 500 ₽ 03.11", "МТС 500 ₽ 10.11"}
+	if len(up.Dues) != len(wantDues) {
+		t.Fatalf("платежей в расшифровке %d, want %d: %+v", len(up.Dues), len(wantDues), up.Dues)
+	}
+	for i, d := range up.Dues {
+		if got := d.Counterparty + " " + d.Amount.String() + " " + d.At.Format("02.01"); got != wantDues[i] {
+			t.Errorf("платёж %d = %q, want %q", i, got, wantDues[i])
+		}
+	}
+	if up.Days != 30 || up.Spending != domain.FromRubles(18000) {
+		t.Errorf("повседневные траты %v за %d дн., want 18 000 ₽ за 30 дн.", up.Spending, up.Days)
+	}
+
 	// Безопасная сумма в income_drop: 2 000 + 24 000 − 25 000 = 1 000 ₽.
 	if safe := s.Card + s.Event.Amount - up.Total; safe != domain.FromRubles(1000) {
 		t.Errorf("безопасно %v, want 1 000 ₽", safe)

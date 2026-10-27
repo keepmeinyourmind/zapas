@@ -97,6 +97,7 @@ func (s *Service) decideIncome(ctx context.Context, r *storage.Repo, client doma
 	return engine.Decide(engine.Input{
 		Now: now, Tx: tx, Kind: kind, Rule: rule, Client: client,
 		Profile: prof, Upcoming: up.Total, Nearest: up.Nearest,
+		Dues: up.Dues, Spending: up.Spending, Days: up.Days,
 	}, s.cfg), nil
 }
 

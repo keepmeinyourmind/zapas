@@ -1,6 +1,8 @@
 package profile
 
 import (
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
@@ -12,7 +14,12 @@ type UpcomingResult struct {
 	Payments domain.Money // обязательные платежи
 	Spending domain.Money // повседневные траты
 	Nearest  *domain.Due  // ближайший обязательный платёж, nil — если его нет; для текста причины
+	Dues     []domain.Due // все обязательные платежи периода по датам — для расшифровки клиенту
+	Days     int          // за сколько дней посчитаны повседневные траты
 }
+
+// DeclaredPaymentsTitle — как называется в расшифровке сумма платежей из анкеты (холодный старт).
+const DeclaredPaymentsTitle = "Обязательные платежи из анкеты"
 
 // Upcoming считает, сколько денег понадобится от now до until (обычно — до следующего дохода):
 // регулярные платежи, которые выпадут на этот период, плюс повседневные траты × число дней.
@@ -25,10 +32,14 @@ func Upcoming(recurring []domain.RecurringPayment, declaredMonthly, daily domain
 		return res
 	}
 	days := daysBetween(now, until)
+	res.Days = days
 	res.Spending = daily * domain.Money(days)
 
 	if len(recurring) == 0 {
 		res.Payments = declaredMonthly * domain.Money(days) / 30
+		if res.Payments > 0 {
+			res.Dues = []domain.Due{{Counterparty: DeclaredPaymentsTitle, Amount: res.Payments}}
+		}
 		res.Total = res.Payments + res.Spending
 		return res
 	}
@@ -36,11 +47,19 @@ func Upcoming(recurring []domain.RecurringPayment, declaredMonthly, daily domain
 	for _, p := range recurring {
 		for due := nextDue(p, now); !due.After(until); due = addMonth(due, p.DayOfMonth) {
 			res.Payments += p.Amount
+			res.Dues = append(res.Dues, domain.Due{Counterparty: p.Counterparty, Amount: p.Amount, At: due})
 			if res.Nearest == nil || due.Before(res.Nearest.At) {
 				res.Nearest = &domain.Due{Counterparty: p.Counterparty, Amount: p.Amount, At: due}
 			}
 		}
 	}
+	// По датам, при равных датах — по имени: порядок в расшифровке всегда одинаковый.
+	slices.SortFunc(res.Dues, func(a, b domain.Due) int {
+		if c := a.At.Compare(b.At); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Counterparty, b.Counterparty)
+	})
 	res.Total = res.Payments + res.Spending
 	return res
 }

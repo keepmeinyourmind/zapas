@@ -12,13 +12,13 @@ import (
 )
 
 const decisionColumns = `id, client_id, source_tx_id, action, amount, options, reason, status,
-	created_at, expires_at, notify_at`
+	created_at, expires_at, notify_at, explanation`
 
 func scanDecision(row pgx.Row) (domain.Decision, error) {
 	var d domain.Decision
-	var options []byte
+	var options, explanation []byte
 	err := row.Scan(&d.ID, &d.ClientID, &d.SourceTxID, &d.Action, &d.Amount, &options, &d.Reason, &d.Status,
-		&d.CreatedAt, &d.ExpiresAt, &d.NotifyAt)
+		&d.CreatedAt, &d.ExpiresAt, &d.NotifyAt, &explanation)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return d, domain.ErrNotFound
 	}
@@ -28,11 +28,24 @@ func scanDecision(row pgx.Row) (domain.Decision, error) {
 	if err := json.Unmarshal(options, &d.Options); err != nil {
 		return d, err
 	}
+	if explanation != nil {
+		if err := json.Unmarshal(explanation, &d.Explanation); err != nil {
+			return d, err
+		}
+	}
 	// pgx отдаёт время в поясе компьютера; держим всё в UTC.
 	d.CreatedAt = d.CreatedAt.UTC()
 	d.ExpiresAt = utcPtr(d.ExpiresAt)
 	d.NotifyAt = utcPtr(d.NotifyAt)
 	return d, nil
+}
+
+// marshalExplanation — расшифровка в JSONB; nil — NULL в базе.
+func marshalExplanation(e *domain.Explanation) ([]byte, error) {
+	if e == nil {
+		return nil, nil
+	}
+	return json.Marshal(e)
 }
 
 func utcPtr(t *time.Time) *time.Time {
@@ -51,10 +64,14 @@ func (r *Repo) InsertDecision(ctx context.Context, d domain.Decision) error {
 	if d.Options == nil {
 		options = []byte("[]")
 	}
+	explanation, err := marshalExplanation(d.Explanation)
+	if err != nil {
+		return err
+	}
 	_, err = r.db.Exec(ctx, `INSERT INTO decisions (`+decisionColumns+`)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 		d.ID, d.ClientID, d.SourceTxID, d.Action, d.Amount, options, d.Reason, d.Status,
-		d.CreatedAt, d.ExpiresAt, d.NotifyAt)
+		d.CreatedAt, d.ExpiresAt, d.NotifyAt, explanation)
 	return err
 }
 
@@ -67,11 +84,15 @@ func (r *Repo) UpdateDecision(ctx context.Context, d domain.Decision, answeredAt
 	if d.Options == nil {
 		options = []byte("[]")
 	}
+	explanation, err := marshalExplanation(d.Explanation)
+	if err != nil {
+		return err
+	}
 	_, err = r.db.Exec(ctx, `
 		UPDATE decisions SET action = $2, amount = $3, options = $4, reason = $5, status = $6,
-		       expires_at = $7, notify_at = $8, answered_at = COALESCE($9, answered_at)
+		       expires_at = $7, notify_at = $8, answered_at = COALESCE($9, answered_at), explanation = $10
 		WHERE id = $1`,
-		d.ID, d.Action, d.Amount, options, d.Reason, d.Status, d.ExpiresAt, d.NotifyAt, answeredAt)
+		d.ID, d.Action, d.Amount, options, d.Reason, d.Status, d.ExpiresAt, d.NotifyAt, answeredAt, explanation)
 	return err
 }
 

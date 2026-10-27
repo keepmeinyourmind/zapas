@@ -132,6 +132,7 @@ func (s *Service) answerConfirm(ctx context.Context, r *storage.Repo, d *domain.
 	}
 	// Тот же вопрос превращается в решение о сумме: у одного поступления одно решение.
 	d.Action, d.Amount, d.Options, d.Reason = next.Action, next.Amount, next.Options, next.Reason
+	d.Explanation = next.Explanation
 	d.Status = next.Status
 	switch {
 	case d.Action == domain.DecisionAsk:
