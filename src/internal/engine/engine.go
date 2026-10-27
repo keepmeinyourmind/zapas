@@ -58,7 +58,20 @@ func Decide(in Input, cfg Config) domain.Decision {
 	if in.Tx.Amount < in.Rule.MinIncome {
 		return skip(fmt.Sprintf("Поступления меньше %s не трогаем", in.Rule.MinIncome))
 	}
-	return domain.Decision{}
+	// Безопасная сумма: только свои деньги на карте (кредитный лимит не считаем)
+	// минус всё, что понадобится до следующего дохода, минус неприкосновенный буфер.
+	safe := in.Client.CardBalance - in.Upcoming - cfg.Buffer
+	if safe < 0 {
+		safe = 0
+	}
+	want := in.Tx.Amount.Share(in.Rule.SavePercent) // сколько клиент хочет откладывать
+	amount := min(safe, want)
+
+	if amount < in.Rule.MinTransfer {
+		return skip("Впереди обязательные платежи — в этот раз не откладываем")
+	}
+
+	return auto(amount, fmt.Sprintf("Доход в пределах обычного — откладываем %s", amount))
 }
 
 // auto — решение перевести сумму без вопроса. Статус pending: перевод ещё исполнит сервис.

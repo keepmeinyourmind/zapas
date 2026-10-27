@@ -120,3 +120,64 @@ func TestDecideSimpleMode(t *testing.T) {
 		})
 	}
 }
+
+// Шаг 3. Безопасная сумма: откладываем не больше, чем останется после обязательных платежей
+// и повседневных трат до следующего дохода. Кредитный лимит — не свои деньги, его не считаем.
+func TestDecideSafeAmount(t *testing.T) {
+	tests := []struct {
+		name       string
+		edit       func(in *Input)
+		cfg        Config
+		wantAction domain.DecisionAction
+		wantAmount domain.Money
+		wantReason string
+	}{
+		{
+			name:       "стабильный доход, денег хватает — откладываем 10% сами",
+			edit:       func(in *Input) {}, // на карте 32 000, впереди 20 000 → безопасно 12 000 ≥ 3 000
+			cfg:        cfg,
+			wantAction: domain.DecisionAuto, wantAmount: domain.FromRubles(3000), wantReason: "обычн",
+		},
+		{
+			name:       "буфер уменьшает безопасную сумму, но 10% всё ещё помещаются",
+			edit:       func(in *Input) {}, // 32 000 − 20 000 − 9 000 = 3 000
+			cfg:        Config{DropPct: 15, RaisePct: 15, Buffer: domain.FromRubles(9000)},
+			wantAction: domain.DecisionAuto, wantAmount: domain.FromRubles(3000), wantReason: "обычн",
+		},
+		{
+			name:       "из-за буфера остаётся меньше 100 ₽ — не откладываем",
+			edit:       func(in *Input) {}, // 32 000 − 20 000 − 11 950 = 50 ₽
+			cfg:        Config{DropPct: 15, RaisePct: 15, Buffer: domain.FromRubles(11950)},
+			wantAction: domain.DecisionSkip, wantAmount: 0, wantReason: "обязательные платежи",
+		},
+		{
+			name:       "впереди платежей больше, чем денег на карте — не откладываем",
+			edit:       func(in *Input) { in.Upcoming = domain.FromRubles(40000) }, // 32 000 − 40 000 < 0
+			cfg:        cfg,
+			wantAction: domain.DecisionSkip, wantAmount: 0, wantReason: "обязательные платежи",
+		},
+		{
+			name: "кредитный лимит не считается своими деньгами",
+			edit: func(in *Input) {
+				in.Upcoming = domain.FromRubles(31950)            // своих свободных — 50 ₽
+				in.Client.CreditLimit = domain.FromRubles(100000) // а кредитки — 100 000 ₽
+			},
+			cfg:        cfg,
+			wantAction: domain.DecisionSkip, wantAmount: 0, wantReason: "обязательные платежи",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := anya()
+			tt.edit(&in)
+			got := Decide(in, tt.cfg)
+
+			if got.Action != tt.wantAction || got.Amount != tt.wantAmount {
+				t.Errorf("Decide() = %s %v, want %s %v (причина: %q)", got.Action, got.Amount, tt.wantAction, tt.wantAmount, got.Reason)
+			}
+			if !strings.Contains(strings.ToLower(got.Reason), tt.wantReason) {
+				t.Errorf("причина %q должна содержать %q", got.Reason, tt.wantReason)
+			}
+		})
+	}
+}
