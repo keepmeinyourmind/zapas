@@ -37,14 +37,40 @@ func (s *Service) ProcessAccountEvent(ctx context.Context, e domain.AccountEvent
 		}
 		if inserted {
 			created = true
-			// Открытые вопросы при аресте закроем, когда появятся решения (сервис переводов).
 			if err := r.SetArrested(ctx, e.ClientID, e.Type == domain.EventArrestImposed, e.OccurredAt); err != nil {
 				return err
 			}
 		}
 		c, err := r.GetClient(ctx, e.ClientID)
+		if err != nil {
+			return err
+		}
 		st = AccountState{ClientID: c.ID, Arrested: c.Arrested}
-		return err
+		if inserted && c.Arrested {
+			return s.closeQuestions(ctx, r, c.ID) // под арестом отвечать на вопросы бессмысленно
+		}
+		return nil
 	})
 	return st, created, err
+}
+
+// closeQuestions закрывает все открытые и ожидающие вопросы клиента.
+func (s *Service) closeQuestions(ctx context.Context, r *storage.Repo, clientID string) error {
+	ids, err := r.OpenQuestionIDs(ctx, clientID)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		d, err := r.GetDecisionForUpdate(ctx, id)
+		if err != nil {
+			return err
+		}
+		d.Status = domain.DecisionExpired
+		d.Reason = "Счёт арестован — вопрос закрыт, переводы невозможны"
+		d.ExpiresAt = nil
+		if err := r.UpdateDecision(ctx, d, nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }

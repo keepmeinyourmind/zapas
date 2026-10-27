@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"time"
 
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
 )
@@ -101,4 +102,47 @@ func (r *Repo) ConfirmedSenders(ctx context.Context, clientID string) (map[strin
 		out[name] = true
 	}
 	return out, rows.Err()
+}
+
+// ListIncomeHistory — операции клиента с меткой классификатора с момента since, от старых к новым.
+func (r *Repo) ListIncomeHistory(ctx context.Context, clientID string, since time.Time) ([]domain.ClassifiedTransaction, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT id, client_id, amount, type, counterparty, counterparty_kind, occurred_at,
+		       COALESCE(income_kind, 'none')
+		FROM transactions WHERE client_id = $1 AND occurred_at >= $2
+		ORDER BY occurred_at, id`, clientID, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.ClassifiedTransaction
+	for rows.Next() {
+		var t domain.ClassifiedTransaction
+		if err := rows.Scan(&t.ID, &t.ClientID, &t.Amount, &t.Type, &t.Counterparty,
+			&t.CounterpartyKind, &t.OccurredAt, &t.IncomeKind); err != nil {
+			return nil, err
+		}
+		t.OccurredAt = t.OccurredAt.UTC()
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// AddConfirmedSender — клиент подтвердил, что переводы от этого физлица — его доход.
+func (r *Repo) AddConfirmedSender(ctx context.Context, clientID, counterparty string) error {
+	_, err := r.db.Exec(ctx, `INSERT INTO confirmed_senders (client_id, counterparty) VALUES ($1, $2)
+		ON CONFLICT DO NOTHING`, clientID, counterparty)
+	return err
+}
+
+// GetTransaction — операция по id.
+func (r *Repo) GetTransaction(ctx context.Context, id string) (domain.Transaction, error) {
+	var t domain.Transaction
+	err := r.db.QueryRow(ctx, `
+		SELECT id, client_id, amount, type, counterparty, counterparty_kind, occurred_at
+		FROM transactions WHERE id = $1`, id,
+	).Scan(&t.ID, &t.ClientID, &t.Amount, &t.Type, &t.Counterparty, &t.CounterpartyKind, &t.OccurredAt)
+	t.OccurredAt = t.OccurredAt.UTC()
+	return t, err
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 
 	"github.com/keepmeinyourmind/zapas/src/internal/classifier"
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
@@ -30,15 +31,19 @@ func validateTransaction(tx domain.Transaction) error {
 	return nil
 }
 
-// ProcessTransaction принимает транзакцию: сохранить → классифицировать.
-// created=false — это повтор уже обработанной транзакции (идемпотентность по id).
+// ProcessTransaction — главный конвейер: сохранить → обновить баланс → классифицировать →
+// решить → перевести. Всё в одной транзакции БД: либо всё, либо ничего.
+// created=false — это повтор уже обработанной транзакции (идемпотентность по id): второго
+// решения и второго перевода не будет, вернётся то, что решили в первый раз.
 func (s *Service) ProcessTransaction(ctx context.Context, tx domain.Transaction) (res TransactionResult, created bool, err error) {
 	if err := validateTransaction(tx); err != nil {
 		return res, false, err
 	}
 
 	err = s.store.InTx(ctx, func(r *storage.Repo) error {
-		if _, err := r.GetClient(ctx, tx.ClientID); err != nil {
+		// Блокируем клиента: его операции обрабатываются строго по очереди.
+		client, err := r.GetClientForUpdate(ctx, tx.ClientID)
+		if err != nil {
 			return err
 		}
 		inserted, err := r.InsertTransaction(ctx, tx)
@@ -46,23 +51,53 @@ func (s *Service) ProcessTransaction(ctx context.Context, tx domain.Transaction)
 			return err
 		}
 		if !inserted { // повтор: отдаём то, что решили в первый раз
-			res.IncomeKind, err = r.GetIncomeKind(ctx, tx.ID)
+			if res.IncomeKind, err = r.GetIncomeKind(ctx, tx.ID); err != nil {
+				return err
+			}
+			if d, err := r.GetDecisionBySourceTx(ctx, tx.ID); err == nil {
+				res.Decision = &d
+			} else if !errors.Is(err, domain.ErrNotFound) {
+				return err
+			}
+			return nil
+		}
+		created = true
+
+		delta := cardDelta(tx)
+		if err := r.AddCardBalance(ctx, tx.ClientID, delta); err != nil {
 			return err
+		}
+		client.CardBalance += delta
+
+		// В простом режиме клиент не давал согласия на анализ — классификатор не запускаем.
+		res.IncomeKind = domain.IncomeNone
+		var confirmed map[string]bool
+		if client.Mode != domain.ModeSimple {
+			history, err := r.ListHistory(ctx, tx.ClientID, tx.ID)
+			if err != nil {
+				return err
+			}
+			if confirmed, err = r.ConfirmedSenders(ctx, tx.ClientID); err != nil {
+				return err
+			}
+			res.IncomeKind = classifier.Classify(tx, history, confirmed)
+			if err := r.SetIncomeKind(ctx, tx.ID, res.IncomeKind); err != nil {
+				return err
+			}
 		}
 
-		history, err := r.ListHistory(ctx, tx.ClientID, tx.ID)
-		if err != nil {
-			return err
-		}
-		confirmed, err := r.ConfirmedSenders(ctx, tx.ClientID)
-		if err != nil {
-			return err
-		}
-		res.IncomeKind = classifier.Classify(tx, history, confirmed)
-		created = true
-		return r.SetIncomeKind(ctx, tx.ID, res.IncomeKind)
+		res.Decision, err = s.decide(ctx, r, client, tx, res.IncomeKind, confirmed)
+		return err
 	})
 	return res, created, err
+}
+
+// cardDelta — как операция меняет баланс карты.
+func cardDelta(tx domain.Transaction) domain.Money {
+	if tx.Type == domain.TxKindOutgoing {
+		return -tx.Amount
+	}
+	return tx.Amount
 }
 
 func (s *Service) ListTransactions(ctx context.Context, clientID string, limit int) ([]domain.ClassifiedTransaction, error) {

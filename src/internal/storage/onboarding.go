@@ -46,3 +46,13 @@ func (r *Repo) OnboardingStatus(ctx context.Context, clientID string) (eligible 
 	}
 	return eligible, monthlyIncome, err
 }
+
+// DeclaredPayments — обязательные платежи в месяц из анкеты (для холодного старта). Нет анкеты — 0.
+func (r *Repo) DeclaredPayments(ctx context.Context, clientID string) (domain.Money, error) {
+	var p domain.Money
+	err := r.db.QueryRow(ctx, `SELECT monthly_payments FROM onboarding WHERE client_id = $1`, clientID).Scan(&p)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	return p, err
+}

@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/keepmeinyourmind/zapas/src/internal/api"
+	"github.com/keepmeinyourmind/zapas/src/internal/clock"
 	"github.com/keepmeinyourmind/zapas/src/internal/config"
 	"github.com/keepmeinyourmind/zapas/src/internal/service"
 	"github.com/keepmeinyourmind/zapas/src/internal/storage"
@@ -49,8 +50,27 @@ func run(log *slog.Logger) error {
 	}
 	log.Info("миграции применены")
 
-	svc := service.New(storage.New(pool), cfg, log)
-	handler := api.NewServer(svc, cfg.CORSOrigin, log)
+	clk := clock.New()
+	svc := service.New(storage.New(pool), cfg, clk, log)
+	handler := api.NewServer(svc, clk, cfg.CORSOrigin, log)
+
+	// Раз в минуту закрываем вопросы, на которые клиент не ответил за 24 часа.
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if expired, err := svc.ExpireDue(ctx); err != nil {
+					log.Error("таймауты вопросов", "err", err)
+				} else if len(expired) > 0 {
+					log.Info("закрыты вопросы без ответа", "count", len(expired))
+				}
+			}
+		}
+	}()
 
 	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: handler.Routes()}
 

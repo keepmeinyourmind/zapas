@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/keepmeinyourmind/zapas/src/internal/clock"
+
 	"github.com/keepmeinyourmind/zapas/src/internal/config"
 	"github.com/keepmeinyourmind/zapas/src/internal/engine"
 	"github.com/keepmeinyourmind/zapas/src/internal/storage"
@@ -16,9 +18,11 @@ type Service struct {
 	askTTL     time.Duration
 	onboarding config.Onboarding
 	log        *slog.Logger
-	now        func() time.Time // текущее время; в демо его можно сдвигать
+	clock      *clock.Clock
+	now        func() time.Time // текущее время; в демо его можно зафиксировать и сдвигать
 }
 
-func New(store *storage.Store, cfg config.Config, log *slog.Logger) *Service {
-	return &Service{store: store, cfg: cfg.Engine, askTTL: cfg.AskTTL, onboarding: cfg.Onboarding, log: log, now: time.Now}
+func New(store *storage.Store, cfg config.Config, clk *clock.Clock, log *slog.Logger) *Service {
+	return &Service{store: store, cfg: cfg.Engine, askTTL: cfg.AskTTL, onboarding: cfg.Onboarding,
+		log: log, clock: clk, now: clk.Now}
 }

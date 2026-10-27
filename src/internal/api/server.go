@@ -6,18 +6,20 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/keepmeinyourmind/zapas/src/internal/clock"
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
 	"github.com/keepmeinyourmind/zapas/src/internal/service"
 )
 
 type Server struct {
 	svc        *service.Service
+	clock      *clock.Clock
 	corsOrigin string
 	log        *slog.Logger
 }
 
-func NewServer(svc *service.Service, corsOrigin string, log *slog.Logger) *Server {
-	return &Server{svc: svc, corsOrigin: corsOrigin, log: log}
+func NewServer(svc *service.Service, clk *clock.Clock, corsOrigin string, log *slog.Logger) *Server {
+	return &Server{svc: svc, clock: clk, corsOrigin: corsOrigin, log: log}
 }
 
 // Routes — все маршруты сервера, обёрнутые в CORS.
@@ -30,6 +32,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/clients/{id}/transactions", s.listTransactions)
 	mux.HandleFunc("POST /api/clients/{id}/onboarding", s.postOnboarding)
 	mux.HandleFunc("POST /api/events/account", s.postAccountEvent)
+	mux.HandleFunc("GET /api/clients/{id}/decisions", s.listDecisions)
+	mux.HandleFunc("POST /api/decisions/{id}/answer", s.answerDecision)
+	mux.HandleFunc("GET /api/clients/{id}/savings", s.getSavings)
+	mux.HandleFunc("POST /api/debug/advance-time", s.advanceTime)
 	return s.cors(mux)
 }
 

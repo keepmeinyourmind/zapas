@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
 	"github.com/keepmeinyourmind/zapas/src/internal/service"
@@ -56,14 +55,10 @@ func (s *Server) postTransaction(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listTransactions(w http.ResponseWriter, r *http.Request) {
-	limit := 50
-	if v := r.URL.Query().Get("limit"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 || n > 200 {
-			s.writeError(w, domain.ValidationError("limit должен быть от 1 до 200"))
-			return
-		}
-		limit = n
+	limit, err := limitParam(r)
+	if err != nil {
+		s.writeError(w, err)
+		return
 	}
 	list, err := s.svc.ListTransactions(r.Context(), r.PathValue("id"), limit)
 	if err != nil {
