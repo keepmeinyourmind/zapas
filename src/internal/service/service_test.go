@@ -216,3 +216,102 @@ func TestArrestClosesQuestions(t *testing.T) {
 		t.Errorf("ответ после ареста: %v, want ErrDecisionClosed", err)
 	}
 }
+
+// Снятие из копилки: деньги переходят на карту один раз, больше, чем есть, снять нельзя,
+// под арестом — нельзя совсем.
+func TestWithdraw(t *testing.T) {
+	s, store, _ := testService(t)
+	subscribe(t, s)
+	ctx := context.Background()
+	if err := store.InTx(ctx, func(r *storage.Repo) error {
+		return r.SetBalances(ctx, "anya", domain.FromRubles(1000), domain.FromRubles(5000))
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	sv, created, err := s.Withdraw(ctx, "anya", "w-1", domain.FromRubles(2000))
+	if err != nil || !created || sv.Balance != domain.FromRubles(3000) || sv.CardBalance != domain.FromRubles(3000) {
+		t.Fatalf("снятие 2 000 ₽: %v, created %v, копилка %v, карта %v; want 3 000 и 3 000", err, created, sv.Balance, sv.CardBalance)
+	}
+	sv, created, err = s.Withdraw(ctx, "anya", "w-1", domain.FromRubles(2000))
+	if err != nil || created || sv.Balance != domain.FromRubles(3000) {
+		t.Errorf("повтор снятия: %v, created %v, копилка %v — повтор не должен снимать второй раз", err, created, sv.Balance)
+	}
+	var ve domain.ValidationError
+	if _, _, err := s.Withdraw(ctx, "anya", "w-2", domain.FromRubles(10000)); !errors.As(err, &ve) {
+		t.Errorf("снятие больше, чем в копилке: %v, want ValidationError", err)
+	}
+	if _, _, err := s.Withdraw(ctx, "anya", "w-3", domain.FromRubles(10000)); !errors.As(err, &ve) {
+		t.Errorf("после отказа баланс не должен был измениться: %v", err)
+	}
+
+	if _, _, err := s.ProcessAccountEvent(ctx, domain.AccountEvent{
+		ID: "ev-1", ClientID: "anya", Type: domain.EventArrestImposed, OccurredAt: testNow,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Withdraw(ctx, "anya", "w-4", domain.FromRubles(1000)); !errors.Is(err, domain.ErrAccountArrested) {
+		t.Errorf("снятие под арестом: %v, want ErrAccountArrested", err)
+	}
+}
+
+// Платёж, который клиент пометил необязательным, больше не резервируется.
+func TestExcludedPaymentIsNotReserved(t *testing.T) {
+	s, store, _ := testService(t)
+	subscribe(t, s)
+	ctx := context.Background()
+
+	// Полгода зарплат 30 000 ₽ 20-го и подписка 2 000 ₽ 22-го — история с высоким доверием.
+	if err := store.InTx(ctx, func(r *storage.Repo) error {
+		for i, m := 0, time.May; m <= time.September; i, m = i+1, m+1 {
+			pay := incoming("salary-"+m.String(), "ООО Ромашка", domain.CounterpartyLegal, 30000)
+			pay.OccurredAt = time.Date(2026, m, 20, 12, 0, 0, 0, time.UTC)
+			sub := domain.Transaction{
+				ID: "sub-" + m.String(), ClientID: "anya", Amount: domain.FromRubles(2000), Type: domain.TxKindOutgoing,
+				Counterparty: "Онлайн-кинотеатр", CounterpartyKind: domain.CounterpartyLegal,
+				OccurredAt: time.Date(2026, m, 22, 12, 0, 0, 0, time.UTC),
+			}
+			for _, tx := range []domain.Transaction{pay, sub} {
+				if _, err := r.InsertTransaction(ctx, tx); err != nil {
+					return err
+				}
+			}
+			if err := r.SetIncomeKind(ctx, pay.ID, domain.IncomeSalary); err != nil {
+				return err
+			}
+		}
+		return r.SetBalances(ctx, "anya", domain.FromRubles(5000), 0)
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	reserved := func(txID string) bool {
+		t.Helper()
+		res, _, err := s.ProcessTransaction(ctx, incoming(txID, "ООО Ромашка", domain.CounterpartyLegal, 30000))
+		if err != nil || res.Decision == nil || res.Decision.Explanation == nil {
+			t.Fatalf("решение по зарплате: %v %+v", err, res.Decision)
+		}
+		for _, it := range res.Decision.Explanation.Upcoming {
+			if it.Title == "Онлайн-кинотеатр" {
+				return true
+			}
+		}
+		return false
+	}
+
+	list, err := s.ListRecurring(ctx, "anya")
+	if err != nil || len(list) != 1 || list[0].Counterparty != "Онлайн-кинотеатр" || list[0].Excluded {
+		t.Fatalf("регулярные платежи: %v %+v; want кинотеатр, не исключён", err, list)
+	}
+	if !reserved("salary-oct-1") {
+		t.Error("пока платёж обязательный, под него должны резервировать деньги")
+	}
+
+	list, err = s.SetPaymentExcluded(ctx, "anya", "Онлайн-кинотеатр", true)
+	if err != nil || len(list) != 1 || !list[0].Excluded {
+		t.Fatalf("исключение: %v %+v", err, list)
+	}
+	if reserved("salary-oct-2") {
+		t.Error("клиент пометил платёж необязательным — резервировать под него не нужно")
+	}
+}

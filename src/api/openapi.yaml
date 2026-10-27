@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Запас — умная копилка
-  version: 0.3.0
+  version: 0.4.0
   description: |
     Контракт бэкенда «Запас». Менять только по согласованию с фронтендом.
 
@@ -206,6 +206,88 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Savings" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/clients/{id}/savings/withdraw:
+    parameters:
+      - $ref: "#/components/parameters/ClientID"
+    post:
+      tags: [rule]
+      summary: Снять деньги из копилки на карту
+      description: |
+        Идемпотентно по `id`: повторный запрос с тем же `id` ничего не меняет.
+        Больше, чем в копилке, снять нельзя (400). Под арестом — 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, amount]
+              properties:
+                id: { type: string, description: Уникален; защита от повторного запроса, example: w-1 }
+                amount: { $ref: "#/components/schemas/Money" }
+            example: { id: w-1, amount: 200000 }
+      responses:
+        "201":
+          description: Деньги переведены на карту
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Savings" }
+        "200":
+          description: Повтор — ничего не изменилось
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Savings" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/clients/{id}/recurring:
+    parameters:
+      - $ref: "#/components/parameters/ClientID"
+    get:
+      tags: [rule]
+      summary: Обязательные платежи, найденные по истории
+      description: |
+        Тот же получатель, не меньше 2 раз, раз в 25–35 дней, сумма ±10%.
+        Под них копилка резервирует деньги до следующего дохода — кроме тех, что клиент исключил.
+      responses:
+        "200":
+          description: Список платежей
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RecurringPayment" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/clients/{id}/recurring/exclusion:
+    parameters:
+      - $ref: "#/components/parameters/ClientID"
+    put:
+      tags: [rule]
+      summary: Пометить платёж необязательным или вернуть в обязательные
+      description: Под необязательный платёж копилка деньги не резервирует.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [counterparty, excluded]
+              properties:
+                counterparty: { type: string, example: Онлайн-кинотеатр }
+                excluded: { type: boolean, description: "true — необязательный, false — снова обязательный" }
+      responses:
+        "200":
+          description: Обновлённый список платежей
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RecurringPayment" }
+        "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /api/clients/{id}/decisions:
@@ -637,6 +719,15 @@ components:
           description: Только у повседневных трат — сколько в день
           allOf: [{ $ref: "#/components/schemas/Money" }]
         days: { type: integer, description: Только у повседневных трат — за сколько дней }
+
+    RecurringPayment:
+      type: object
+      properties:
+        counterparty: { type: string, example: Рассрочка за ноутбук }
+        amount: { $ref: "#/components/schemas/Money" }
+        day_of_month: { type: integer, example: 25 }
+        last_at: { type: string, format: date-time }
+        excluded: { type: boolean, description: Клиент пометил необязательным — деньги под него не резервируются }
 
     AnswerRequest:
       type: object

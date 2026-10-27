@@ -37,6 +37,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/clients/{id}/decisions", s.listDecisions)
 	mux.HandleFunc("POST /api/decisions/{id}/answer", s.answerDecision)
 	mux.HandleFunc("GET /api/clients/{id}/savings", s.getSavings)
+	mux.HandleFunc("POST /api/clients/{id}/savings/withdraw", s.withdraw)
+	mux.HandleFunc("GET /api/clients/{id}/recurring", s.listRecurring)
+	mux.HandleFunc("PUT /api/clients/{id}/recurring/exclusion", s.setPaymentExcluded)
 	mux.HandleFunc("POST /api/debug/advance-time", s.advanceTime)
 	mux.HandleFunc("POST /api/scenarios/{name}/run", s.runScenario)
 	return s.cors(mux)
@@ -45,7 +48,7 @@ func (s *Server) Routes() http.Handler {
 func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", s.corsOrigin)
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

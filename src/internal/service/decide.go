@@ -91,8 +91,14 @@ func (s *Service) decideIncome(ctx context.Context, r *storage.Repo, client doma
 	if err != nil {
 		return domain.Decision{}, err
 	}
+	excluded, err := r.ExcludedPayments(ctx, tx.ClientID)
+	if err != nil {
+		return domain.Decision{}, err
+	}
+	// Повседневные траты считаем без всех регулярных платежей, а резервируем деньги только
+	// под обязательные: платёж, который клиент пометил необязательным, не резервируем вовсе.
 	prof, recurring := profile.Build(history, rule.DeclaredIncome, now)
-	up := profile.Upcoming(recurring, declaredPayments, prof.DailySpending, now, prof.NextIncomeAt)
+	up := profile.Upcoming(withoutExcluded(recurring, excluded), declaredPayments, prof.DailySpending, now, prof.NextIncomeAt)
 
 	return engine.Decide(engine.Input{
 		Now: now, Tx: tx, Kind: kind, Rule: rule, Client: client,
