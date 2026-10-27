@@ -86,22 +86,38 @@ func (s *Service) decide(ctx context.Context, r *storage.Repo, client domain.Cli
 func (s *Service) decideIncome(ctx context.Context, r *storage.Repo, client domain.Client, tx domain.Transaction,
 	kind domain.IncomeKind, rule domain.SavingsRule, now time.Time) (domain.Decision, error) {
 
-	history, err := r.ListIncomeHistory(ctx, tx.ClientID, now.Add(-profileWindow))
+	prof, up, err := s.upcoming(ctx, r, tx.ClientID, tx.ID, rule, now)
 	if err != nil {
 		return domain.Decision{}, err
 	}
-	declaredPayments, err := r.DeclaredPayments(ctx, tx.ClientID)
+	return engine.Decide(engine.Input{
+		Now: now, Tx: tx, Kind: kind, Rule: rule, Client: client,
+		Profile: prof, Upcoming: up.Total, Nearest: up.Nearest,
+		Dues: up.Dues, Spending: up.Spending, Days: up.Days,
+	}, s.cfg), nil
+}
+
+// upcoming — профиль клиента и сколько денег ему понадобится до следующего дохода.
+// currentTxID — поступление, по которому решаем: в «обычный доход» оно не входит.
+func (s *Service) upcoming(ctx context.Context, r *storage.Repo, clientID, currentTxID string,
+	rule domain.SavingsRule, now time.Time) (domain.Profile, profile.UpcomingResult, error) {
+
+	history, err := r.ListIncomeHistory(ctx, clientID, now.Add(-profileWindow))
 	if err != nil {
-		return domain.Decision{}, err
+		return domain.Profile{}, profile.UpcomingResult{}, err
 	}
-	excluded, err := r.ExcludedPayments(ctx, tx.ClientID)
+	declaredPayments, err := r.DeclaredPayments(ctx, clientID)
 	if err != nil {
-		return domain.Decision{}, err
+		return domain.Profile{}, profile.UpcomingResult{}, err
+	}
+	excluded, err := r.ExcludedPayments(ctx, clientID)
+	if err != nil {
+		return domain.Profile{}, profile.UpcomingResult{}, err
 	}
 	// Резервируем деньги только под обязательные платежи. Платёж, который клиент пометил
 	// необязательным, — обычная трата: он входит в повседневные траты, а не в резерв по дате.
 	prof, recurring := profile.Build(history, profile.Options{
-		CurrentTxID: tx.ID, DeclaredIncome: rule.DeclaredIncome, Excluded: excluded,
+		CurrentTxID: currentTxID, DeclaredIncome: rule.DeclaredIncome, Excluded: excluded,
 	}, now)
 	// Платежи из анкеты — только для холодного старта, пока по истории не найдено ни одного платежа.
 	// Если клиент исключил все найденные, анкета их не заменяет.
@@ -109,12 +125,19 @@ func (s *Service) decideIncome(ctx context.Context, r *storage.Repo, client doma
 		declaredPayments = 0
 	}
 	up := profile.Upcoming(withoutExcluded(recurring, excluded), declaredPayments, prof.DailySpending, now, prof.NextIncomeAt)
+	return prof, up, nil
+}
 
-	return engine.Decide(engine.Input{
-		Now: now, Tx: tx, Kind: kind, Rule: rule, Client: client,
-		Profile: prof, Upcoming: up.Total, Nearest: up.Nearest,
-		Dues: up.Dues, Spending: up.Spending, Days: up.Days,
-	}, s.cfg), nil
+// safeNow — сколько сейчас можно безопасно отложить: свои деньги на карте минус всё,
+// что понадобится до следующего дохода, минус неприкосновенный остаток. Так же считает движок.
+func (s *Service) safeNow(ctx context.Context, r *storage.Repo, client domain.Client, rule domain.SavingsRule,
+	currentTxID string, now time.Time) (domain.Money, error) {
+
+	_, up, err := s.upcoming(ctx, r, client.ID, currentTxID, rule, now)
+	if err != nil {
+		return 0, err
+	}
+	return max(client.CardBalance-up.Total-s.cfg.Buffer, 0), nil
 }
 
 func isQuestion(d domain.Decision) bool {

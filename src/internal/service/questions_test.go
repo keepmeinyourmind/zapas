@@ -212,3 +212,29 @@ func TestAnswerLocksClientFirst(t *testing.T) {
 		t.Errorf("ответ клиента: %v", err)
 	}
 }
+
+// Ответ на вопрос сверяется с безопасной суммой на момент ответа: пока клиент думал,
+// он мог потратить деньги, которые понадобятся до следующего дохода.
+func TestAnswerRechecksSafeAmount(t *testing.T) {
+	s, store, _ := testService(t)
+	subscribe(t, s)
+	ctx := context.Background()
+
+	res, _, err := s.ProcessTransaction(ctx, incoming("t-salary", "ООО Ромашка", domain.CounterpartyLegal, 30000))
+	if err != nil || res.Decision == nil || res.Decision.Action != domain.DecisionAsk {
+		t.Fatalf("новый клиент — вопрос о сумме: %v %+v", err, res.Decision)
+	}
+	spend := incoming("t-spend", "Магазин", domain.CounterpartyLegal, 28000)
+	spend.Type = domain.TxKindOutgoing
+	if _, _, err := s.ProcessTransaction(ctx, spend); err != nil {
+		t.Fatal(err)
+	}
+
+	d, err := s.AnswerDecision(ctx, res.Decision.ID, Answer{Choice: ChoiceAmount, Amount: res.Decision.Amount})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, savings := balances(t, store); savings != 0 || d.Status != domain.DecisionSkipped {
+		t.Errorf("копилка %v, статус %s: на карте осталось 2 000 ₽ при тратах 4 000 ₽ в день — откладывать нельзя", savings, d.Status)
+	}
+}

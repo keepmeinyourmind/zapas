@@ -73,7 +73,7 @@ func (s *Service) AnswerDecision(ctx context.Context, id string, a Answer) (doma
 
 		switch d.Action {
 		case domain.DecisionAsk:
-			err = s.answerAmount(ctx, r, &d, rule, a)
+			err = s.answerAmount(ctx, r, &d, client, rule, a, now)
 		case domain.DecisionConfirmIncome:
 			err = s.answerConfirm(ctx, r, &d, client, rule, a, now)
 		}
@@ -92,7 +92,8 @@ func (s *Service) AnswerDecision(ctx context.Context, id string, a Answer) (doma
 	return d, err
 }
 
-func (s *Service) answerAmount(ctx context.Context, r *storage.Repo, d *domain.Decision, rule domain.SavingsRule, a Answer) error {
+func (s *Service) answerAmount(ctx context.Context, r *storage.Repo, d *domain.Decision, client domain.Client,
+	rule domain.SavingsRule, a Answer, now time.Time) error {
 	switch a.Choice {
 	case ChoiceSkip:
 		d.Status = domain.DecisionSkipped
@@ -103,8 +104,23 @@ func (s *Service) answerAmount(ctx context.Context, r *storage.Repo, d *domain.D
 		if a.Amount < rule.MinTransfer || a.Amount > limit {
 			return domain.ValidationError(fmt.Sprintf("Сумма должна быть от %s до %s", rule.MinTransfer, limit))
 		}
-		d.Amount = a.Amount
-		d.Reason = fmt.Sprintf("Вы решили отложить %s", a.Amount)
+		// Пока клиент думал, он мог потратить деньги: переводим не больше, чем безопасно сейчас.
+		safe, err := s.safeNow(ctx, r, client, rule, d.SourceTxID, now)
+		if err != nil {
+			return err
+		}
+		amount := min(a.Amount, safe)
+		switch {
+		case amount < rule.MinTransfer:
+			d.Status = domain.DecisionSkipped
+			d.Reason = "Пока вы решали, на карте стало меньше денег — до следующего дохода они понадобятся, не откладываем"
+			return nil
+		case amount < a.Amount:
+			d.Reason = fmt.Sprintf("Вы выбрали %s, но сейчас безопасно только %s — откладываем %s", a.Amount, amount, amount)
+		default:
+			d.Reason = fmt.Sprintf("Вы решили отложить %s", amount)
+		}
+		d.Amount = amount
 		return s.execute(ctx, r, d, rule)
 	default:
 		return domain.ValidationError("Для этого вопроса ответ — amount или skip")
