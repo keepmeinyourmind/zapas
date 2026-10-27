@@ -73,3 +73,37 @@ jobs:
           done
           cat /tmp/server.log
           curl -sf localhost:18080/health
+
+  docker:
+    name: docker compose и демо-сценарии
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Поднять всё, как эксперт по README
+        run: docker compose up -d --build --wait
+
+      - name: Демо-сценарии дают ожидаемые решения
+        run: |
+          check() { # сценарий, ожидаемое действие, ожидаемая сумма в копейках
+            got=$(curl -sf -X POST "localhost:8080/api/scenarios/$1/run" | jq -r '"\(.decision.action // "none") \(.decision.amount // 0)"')
+            echo "$1: $got"
+            [ "$got" = "$2 $3" ] || { echo "ожидали: $2 $3"; exit 1; }
+          }
+          check stable        auto          300000
+          check income_drop   ask           100000
+          check self_transfer none          0
+          check new_client    ask           300000
+          check income_rise   suggest_raise 360000
+
+      - name: Swagger UI открывается
+        run: curl -sf -o /dev/null localhost:8081
+
+      - name: Логи бэкенда
+        if: always()
+        run: docker compose logs backend
+
+      - name: Остановить
+        if: always()
+        run: docker compose down -v

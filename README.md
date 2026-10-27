@@ -39,37 +39,55 @@
 | `skip` | не доход, копилка на паузе, цель достигнута, сумма меньше 100 ₽ |
 | `suggest_raise` | доход вырос: переводим и предлагаем поднять процент |
 
-
 ## Запуск
 
-Нужен Docker.
+Нужен только Docker.
 
 ```bash
-docker compose up
+git clone https://github.com/keepmeinyourmind/zapas.git && cd zapas
+docker compose up -d --build --wait
 ```
 
-После запуска:
-- API: http://localhost:8080 (`GET /health`)
-- Swagger UI с описанием API: http://localhost:8081
+Поднимутся PostgreSQL, бэкенд (миграции применяются сами) и Swagger UI:
+- API: http://localhost:8080 — проверка `curl localhost:8080/health` → `{"status":"ok"}`
+- Swagger UI с описанием и кнопкой «Try it out»: http://localhost:8081
 
-## Демо
+Остановить: `docker compose down` (с удалением данных — `docker compose down -v`).
 
-Пять детерминированных сценариев Ани: одинаковые входные данные всегда дают одинаковый результат.
+## Демо за 2 минуты
 
-| Сценарий | Событие | Решение |
+Пять детерминированных сценариев Ани, 20 лет, студентка: доход около 30 000 ₽, рассрочка за ноутбук 6 000 ₽ 25-го, цель «Подушка», откладывает 10%. Каждый сценарий сбрасывает Аню, загружает её историю за полгода и присылает одно поступление. Одинаковый сценарий всегда даёт одинаковый результат.
+
+| Сценарий | Что пришло | Решение «Запаса» |
 |---|---|---|
-| `stable` | пришло 30 000 ₽ | `auto`, 3 000 ₽ |
-| `income_drop` | пришло 24 000 ₽, через 5 дней рассрочка | `ask`, 1 000 ₽ или пропуск |
-| `self_transfer` | 10 000 ₽ со своей карты другого банка | не доход, решения нет |
-| `new_client` | первая зарплата без истории | `ask`, «мы ещё изучаем ваш доход» |
-| `income_rise` | 36 000 ₽ третий месяц подряд | `auto` + предложение поднять процент |
+| `stable` | обычные 30 000 ₽ | `auto` — сам откладывает 3 000 ₽ |
+| `income_drop` | 24 000 ₽ вместо 30 000, через 5 дней рассрочка | `ask` — «Доход ниже обычного на 20%. Отложить 1 000 ₽?» |
+| `self_transfer` | 10 000 ₽ со своей карты другого банка | не доход — решения нет |
+| `new_client` | первая зарплата, истории нет | `ask` — «Мы ещё изучаем ваш доход» |
+| `income_rise` | 36 000 ₽ вместо 30 000 | `suggest_raise` — откладывает 3 600 ₽ и предлагает поднять процент |
+
+Главный сценарий:
 
 ```bash
-curl -X POST localhost:8080/api/scenarios/income_drop/run
-curl localhost:8080/api/clients/anya/decisions
+# 1. Пришло меньше обычного — «Запас» не списывает молча, а спрашивает
+curl -s -X POST localhost:8080/api/scenarios/income_drop/run
+
+# 2. История решений с причинами
+curl -s localhost:8080/api/clients/anya/decisions
+
+# 3. Ответить на вопрос: отложить 1 000 ₽ (id — из ответа шага 1)
+curl -s -X POST localhost:8080/api/decisions/<id>/answer -d '{"choice":"amount","amount":100000}'
+
+# 4. Или не отвечать: через 24 часа сработает безопасный вариант
+curl -s -X POST localhost:8080/api/debug/advance-time -d '{"hours":25}'
+
+# 5. Состояние копилки
+curl -s localhost:8080/api/clients/anya/savings
 ```
 
-В ответе видны действие, сумма и причина на русском.
+Обычное автопополнение в `income_drop` молча списало бы 2 400 ₽ — и на рассрочку не хватило бы 1 400 ₽. «Запас» посчитал, что безопасно отложить только 1 000 ₽, и спросил.
+
+Все суммы в API — в копейках (`100000` = 1 000 ₽), время — UTC.
 
 ## Тесты
 
@@ -77,12 +95,14 @@ curl localhost:8080/api/clients/anya/decisions
 cd src && go test ./...
 ```
 
-Движок и классификатор покрыты table-driven тестами. Интеграционные тесты (идемпотентность, поздний ответ клиента) идут с настоящим PostgreSQL:
+Движок, классификатор, профиль дохода, анкета и тихие часы покрыты table-driven тестами. Интеграционные тесты — повтор транзакции не даёт второго перевода, очередь вопросов, поздний ответ, арест, все сценарии демо — идут с настоящим PostgreSQL:
 
 ```bash
 docker compose up -d db
-cd src && TEST_DATABASE_URL='postgres://zapas:zapas@localhost:5433/zapas?sslmode=disable' go test ./...
+cd src && TEST_DATABASE_URL='postgres://zapas:zapas@localhost:5433/zapas?sslmode=disable' go test -p 1 ./...
 ```
+
+Всё это запускается в CI на каждый пуш, вместе с `docker compose up` и прогоном сценариев (бейдж вверху).
 
 ## Архитектура
 
@@ -110,9 +130,18 @@ HTTP → internal/api → internal/service ─┬─ internal/classifier   до�
 | `HTTP_ADDR` | `:8080` |
 | `CORS_ORIGIN` | `http://localhost:5173` |
 | `DROP_THRESHOLD_PCT`, `RAISE_THRESHOLD_PCT` | `15` (отклонение дохода, %) |
-| `BUFFER_RUB` | `0` |
+| `BUFFER_RUB` | `0` (неприкосновенный остаток на карте, ₽) |
+| `ONBOARDING_MIN_AGE` | `18` |
+| `ONBOARDING_MIN_SCORE` | `40` (порог баллов анкеты из 100) |
 
 Порт базы на хосте — 5433, чтобы не конфликтовать с локальным PostgreSQL на 5432.
+
+Запуск без Docker для разработки (нужен Go 1.27+):
+
+```bash
+docker compose up -d db
+cd src && go run ./cmd/server
+```
 
 ## Документация
 

@@ -12,6 +12,16 @@ services:
       interval: 2s
       retries: 15
 
+  backend:
+    build: ./src
+    environment:
+      # Внутри Docker база доступна по имени сервиса db и своему порту 5432.
+      DATABASE_URL: postgres://zapas:zapas@db:5432/zapas?sslmode=disable
+      CORS_ORIGIN: http://localhost:5173
+    ports: ["8080:8080"]
+    depends_on:
+      db: { condition: service_healthy }
+
   swagger:
     image: swaggerapi/swagger-ui
     environment:
