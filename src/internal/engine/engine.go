@@ -4,6 +4,7 @@ package engine
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
@@ -71,6 +72,45 @@ func Decide(in Input, cfg Config) domain.Decision {
 		return skip("Впереди обязательные платежи — в этот раз не откладываем")
 	}
 
+	if in.Profile.Trust == domain.TrustLevelLow {
+		return ask(amount, []domain.Money{amount}, fmt.Sprintf("Мы еще изучаем ваш доход. Отложить %s?", amount))
+	}
+	// Насколько поступление отличается от обычного дохода такого вида, в целых процентах.
+	// Аванс сравниваем с авансами, зарплату — с зарплатами. Не с чем сравнить — считаем обычным.
+	expected := in.Profile.ExpectedFor(in.Kind)
+	dev := 0
+	if expected > 0 {
+		dev = int((in.Tx.Amount - expected) * 100 / expected)
+	}
+
+	// 1. Премия — разовая выплата: предлагаем отложить больше обычного, если безопасно.
+	if in.Kind == domain.IncomeBonus {
+		options := []domain.Money{amount}
+		if more := min(want*2, safe); more > amount {
+			options = append(options, more)
+		}
+		return ask(amount, options, "Пришла премия — отложить больше в этот раз?")
+	}
+
+	// 2. Доход заметно ниже обычного — не списываем молча, спрашиваем. Главная фишка «Запаса».
+	if dev < -cfg.DropPct {
+		return ask(amount, []domain.Money{amount},
+			fmt.Sprintf("Доход ниже обычного на %d%%. Отложить %s?", -dev, amount))
+	}
+
+	// 3. Впереди платёж: безопасно отложить меньше, чем обычно, — спрашиваем и объясняем почему.
+	if amount < want {
+		return ask(amount, []domain.Money{amount}, upcomingReason(in, amount))
+	}
+
+	// 4. Доход заметно выше обычного. Доверяем выводам — переводим и предлагаем поднять процент,
+	// пока доверие среднее — спрашиваем.
+	if dev > cfg.RaisePct {
+		if in.Profile.Trust == domain.TrustLevelHigh {
+			return suggestRaise(amount, fmt.Sprintf("Доход вырос на %d%% — откладываем %s. Можно поднять процент", dev, amount))
+		}
+		return ask(amount, []domain.Money{amount}, fmt.Sprintf("Доход выше обычного на %d%%. Отложить %s?", dev, amount))
+	}
 	return auto(amount, fmt.Sprintf("Доход в пределах обычного — откладываем %s", amount))
 }
 
@@ -92,5 +132,22 @@ func decideSimple(in Input) domain.Decision {
 		return skip(fmt.Sprintf("Откладывать меньше %s не будем", in.Rule.MinTransfer))
 	}
 	return auto(amount, fmt.Sprintf("Откладываем %d%% с поступления", in.Rule.SavePercent))
+}
 
+func ask(amount domain.Money, options []domain.Money, reason string) domain.Decision {
+	return domain.Decision{Action: domain.DecisionAsk, Amount: amount, Options: options, Status: domain.DecisionPending, Reason: reason}
+}
+
+// suggestRaise — перевести и предложить клиенту поднять процент. Статус pending: перевод исполнит сервис.
+func suggestRaise(amount domain.Money, reason string) domain.Decision {
+	return domain.Decision{Action: domain.DecisionSuggestRaise, Amount: amount, Status: domain.DecisionPending, Reason: reason}
+}
+
+// upcomingReason — почему предлагаем отложить меньше обычного: называем ближайший платёж, если знаем его.
+func upcomingReason(in Input, amount domain.Money) string {
+	if in.Nearest == nil {
+		return fmt.Sprintf("Впереди обязательные платежи — предлагаем отложить %s", amount)
+	}
+	days := int(math.Ceil(in.Nearest.At.Sub(in.Now).Hours() / 24))
+	return fmt.Sprintf("Через %d дн. платёж «%s» — предлагаем отложить %s", days, in.Nearest.Counterparty, amount)
 }

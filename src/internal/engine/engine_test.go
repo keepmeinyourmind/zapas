@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -55,7 +56,7 @@ func TestDecideSkips(t *testing.T) {
 			if got.Action != domain.DecisionSkip || got.Amount != 0 || got.Status != domain.DecisionSkipped {
 				t.Errorf("Decide() = %s %v, статус %s; want skip 0, статус skipped", got.Action, got.Amount, got.Status)
 			}
-			if !strings.Contains(strings.ToLower(got.Reason), tt.wantReason) {
+			if !hasReason(got.Reason, tt.wantReason) {
 				t.Errorf("причина %q должна содержать %q", got.Reason, tt.wantReason)
 			}
 		})
@@ -114,7 +115,7 @@ func TestDecideSimpleMode(t *testing.T) {
 			if got.Status != wantStatus {
 				t.Errorf("статус %q, want %q", got.Status, wantStatus)
 			}
-			if !strings.Contains(strings.ToLower(got.Reason), tt.wantReason) {
+			if !hasReason(got.Reason, tt.wantReason) {
 				t.Errorf("причина %q должна содержать %q", got.Reason, tt.wantReason)
 			}
 		})
@@ -175,9 +176,191 @@ func TestDecideSafeAmount(t *testing.T) {
 			if got.Action != tt.wantAction || got.Amount != tt.wantAmount {
 				t.Errorf("Decide() = %s %v, want %s %v (причина: %q)", got.Action, got.Amount, tt.wantAction, tt.wantAmount, got.Reason)
 			}
-			if !strings.Contains(strings.ToLower(got.Reason), tt.wantReason) {
+			if !hasReason(got.Reason, tt.wantReason) {
 				t.Errorf("причина %q должна содержать %q", got.Reason, tt.wantReason)
 			}
 		})
 	}
+}
+
+// Шаг 4. Холодный старт: истории мало (меньше 3 месяцев) — своим выводам ещё не доверяем
+// и всегда спрашиваем клиента, даже если всё выглядит нормально.
+func TestDecideColdStart(t *testing.T) {
+	tests := []struct {
+		name       string
+		edit       func(in *Input)
+		wantAction domain.DecisionAction
+		wantAmount domain.Money
+		wantReason string
+	}{
+		{"мало истории — спрашиваем, а не переводим сами", func(in *Input) { in.Profile.Trust = domain.TrustLevelLow },
+			domain.DecisionAsk, domain.FromRubles(3000), "мы ещё изучаем ваш доход"},
+		{"мало истории и впереди платежи — спрашиваем про безопасную сумму", func(in *Input) {
+			in.Profile.Trust = domain.TrustLevelLow
+			in.Upcoming = domain.FromRubles(31000) // безопасно 1 000 ₽
+		}, domain.DecisionAsk, domain.FromRubles(1000), "мы ещё изучаем ваш доход"},
+		{"мало истории, но платежи съедают всё — не спрашиваем впустую", func(in *Input) {
+			in.Profile.Trust = domain.TrustLevelLow
+			in.Upcoming = domain.FromRubles(40000)
+		}, domain.DecisionSkip, 0, "обязательные платежи"},
+		{"средний уровень доверия — это уже не холодный старт", func(in *Input) { in.Profile.Trust = domain.TrustLevelMid },
+			domain.DecisionAuto, domain.FromRubles(3000), "обычн"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := anya()
+			tt.edit(&in)
+			got := Decide(in, cfg)
+			check(t, got, tt.wantAction, tt.wantAmount, tt.wantReason)
+		})
+	}
+}
+
+// Шаг 5. Доход изменился или впереди платёж — не списываем молча, а спрашиваем.
+// Обычный доход Ани — 30 000 ₽, порог отклонения — 15%.
+func TestDecideIncomeChanges(t *testing.T) {
+	rassrochka := &domain.Due{
+		Counterparty: "Рассрочка за ноутбук", Amount: domain.FromRubles(6000),
+		At: time.Date(2026, 10, 30, 10, 0, 0, 0, time.UTC), // через 5 дней
+	}
+
+	tests := []struct {
+		name        string
+		edit        func(in *Input)
+		wantAction  domain.DecisionAction
+		wantAmount  domain.Money
+		wantReason  string
+		wantOptions []domain.Money // nil — не проверяем
+	}{
+		{
+			name: "демо income_drop: пришло 24 000 ₽, через 5 дней рассрочка — спросить про 1 000 ₽",
+			edit: func(in *Input) {
+				in.Tx.Amount, in.Client.CardBalance = domain.FromRubles(24000), domain.FromRubles(26000)
+				in.Upcoming, in.Nearest = domain.FromRubles(25000), rassrochka // безопасно 1 000 ₽
+			},
+			wantAction: domain.DecisionAsk, wantAmount: domain.FromRubles(1000), wantReason: "ниже обычного на 20%",
+			wantOptions: []domain.Money{domain.FromRubles(1000)},
+		},
+		{
+			name: "доход упал на 20%, денег хватает — всё равно спрашиваем",
+			edit: func(in *Input) {
+				in.Tx.Amount, in.Client.CardBalance = domain.FromRubles(24000), domain.FromRubles(26000)
+				in.Upcoming = domain.FromRubles(20000) // безопасно 6 000 ≥ 2 400
+			},
+			wantAction: domain.DecisionAsk, wantAmount: domain.FromRubles(2400), wantReason: "ниже обычного на 20%",
+		},
+		{
+			name: "доход ровно на 15% ниже — ещё в пределах обычного",
+			edit: func(in *Input) {
+				in.Tx.Amount, in.Client.CardBalance = domain.FromRubles(25500), domain.FromRubles(27500)
+			},
+			wantAction: domain.DecisionAuto, wantAmount: domain.FromRubles(2550), wantReason: "обычн",
+		},
+		{
+			name: "аванс сравниваем с авансами, а не с зарплатой — это не падение дохода",
+			edit: func(in *Input) {
+				in.Kind, in.Tx.Amount, in.Client.CardBalance = domain.IncomeAdvance, domain.FromRubles(10000), domain.FromRubles(12000)
+				in.Upcoming = domain.FromRubles(5000)
+				in.Profile.Expected[domain.IncomeAdvance] = domain.FromRubles(10000)
+			},
+			wantAction: domain.DecisionAuto, wantAmount: domain.FromRubles(1000), wantReason: "обычн",
+		},
+		{
+			name: "впереди платёж урезал сумму — спрашиваем и называем платёж",
+			edit: func(in *Input) {
+				in.Upcoming, in.Nearest = domain.FromRubles(30500), rassrochka // безопасно 1 500 < 3 000
+			},
+			wantAction: domain.DecisionAsk, wantAmount: domain.FromRubles(1500), wantReason: "через 5 дн",
+			wantOptions: []domain.Money{domain.FromRubles(1500)},
+		},
+		{
+			name:       "впереди траты урезали сумму, конкретного платежа нет",
+			edit:       func(in *Input) { in.Upcoming = domain.FromRubles(30500) },
+			wantAction: domain.DecisionAsk, wantAmount: domain.FromRubles(1500), wantReason: "обязательные платежи",
+		},
+		{
+			name: "премия — спрашиваем, не отложить ли больше",
+			edit: func(in *Input) {
+				in.Kind, in.Tx.Amount, in.Client.CardBalance = domain.IncomeBonus, domain.FromRubles(60000), domain.FromRubles(62000)
+			},
+			wantAction: domain.DecisionAsk, wantAmount: domain.FromRubles(6000), wantReason: "премия",
+			wantOptions: []domain.Money{domain.FromRubles(6000), domain.FromRubles(12000)}, // 10% или вдвое больше
+		},
+		{
+			name: "доход вырос на 20% — откладываем и предлагаем поднять процент",
+			edit: func(in *Input) {
+				in.Tx.Amount, in.Client.CardBalance = domain.FromRubles(36000), domain.FromRubles(38000)
+			},
+			wantAction: domain.DecisionSuggestRaise, wantAmount: domain.FromRubles(3600), wantReason: "вырос на 20%",
+		},
+		{
+			name: "доход ровно на 15% выше — ещё в пределах обычного",
+			edit: func(in *Input) {
+				in.Tx.Amount, in.Client.CardBalance = domain.FromRubles(34500), domain.FromRubles(36500)
+			},
+			wantAction: domain.DecisionAuto, wantAmount: domain.FromRubles(3450), wantReason: "обычн",
+		},
+		{
+			name: "доход вырос, но доверие среднее — не предлагаем, а спрашиваем",
+			edit: func(in *Input) {
+				in.Profile.Trust = domain.TrustLevelMid
+				in.Tx.Amount, in.Client.CardBalance = domain.FromRubles(36000), domain.FromRubles(38000)
+			},
+			wantAction: domain.DecisionAsk, wantAmount: domain.FromRubles(3600), wantReason: "выше обычного на 20%",
+		},
+		{
+			name: "первый доход такого вида — сравнить не с чем, переводим",
+			edit: func(in *Input) {
+				in.Kind, in.Tx.Amount, in.Client.CardBalance = domain.IncomeFreelance, domain.FromRubles(5000), domain.FromRubles(25000)
+				in.Upcoming = domain.FromRubles(10000)
+			},
+			wantAction: domain.DecisionAuto, wantAmount: domain.FromRubles(500), wantReason: "обычн",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := anya()
+			tt.edit(&in)
+			got := Decide(in, cfg)
+			check(t, got, tt.wantAction, tt.wantAmount, tt.wantReason)
+			if tt.wantOptions != nil && !slices.Equal(got.Options, tt.wantOptions) {
+				t.Errorf("варианты %v, want %v", got.Options, tt.wantOptions)
+			}
+		})
+	}
+}
+
+// Одинаковый вход — одинаковое решение: демо-сценарии должны повторяться.
+func TestDecideIsDeterministic(t *testing.T) {
+	in := anya()
+	first := Decide(in, cfg)
+	for range 100 {
+		if got := Decide(anya(), cfg); got.Action != first.Action || got.Amount != first.Amount || got.Reason != first.Reason {
+			t.Fatalf("решение изменилось: %+v vs %+v", got, first)
+		}
+	}
+}
+
+// check — общая проверка решения: действие, сумма, статус и причина.
+func check(t *testing.T, got domain.Decision, action domain.DecisionAction, amount domain.Money, reason string) {
+	t.Helper()
+	if got.Action != action || got.Amount != amount {
+		t.Errorf("Decide() = %s %v, want %s %v (причина: %q)", got.Action, got.Amount, action, amount, got.Reason)
+	}
+	wantStatus := domain.DecisionPending // auto, ask, suggest_raise — ждут перевода или ответа
+	if action == domain.DecisionSkip {
+		wantStatus = domain.DecisionSkipped
+	}
+	if got.Status != wantStatus {
+		t.Errorf("статус %q, want %q", got.Status, wantStatus)
+	}
+	if !hasReason(got.Reason, reason) {
+		t.Errorf("причина %q должна содержать %q", got.Reason, reason)
+	}
+}
+
+// hasReason — есть ли фраза в причине для клиента: без учёта регистра, «е» и «ё» — одна буква.
+func hasReason(reason, want string) bool {
+	norm := func(s string) string { return strings.ReplaceAll(strings.ToLower(s), "ё", "е") }
+	return strings.Contains(norm(reason), norm(want))
 }
