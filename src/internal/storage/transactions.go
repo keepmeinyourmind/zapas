@@ -44,29 +44,6 @@ func (r *Repo) GetIncomeKind(ctx context.Context, txID string) (domain.IncomeKin
 	return domain.IncomeKind(*kind), nil
 }
 
-// ListHistory — прошлые операции клиента от старых к новым, кроме операции exceptID.
-func (r *Repo) ListHistory(ctx context.Context, clientID, exceptID string) ([]domain.Transaction, error) {
-	rows, err := r.db.Query(ctx, `
-		SELECT id, client_id, amount, type, counterparty, counterparty_kind, occurred_at
-		FROM transactions WHERE client_id = $1 AND id <> $2
-		ORDER BY occurred_at, id`, clientID, exceptID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var out []domain.Transaction
-	for rows.Next() {
-		var t domain.Transaction
-		if err := rows.Scan(&t.ID, &t.ClientID, &t.Amount, &t.Type, &t.Counterparty, &t.CounterpartyKind, &t.OccurredAt); err != nil {
-			return nil, err
-		}
-		t.OccurredAt = t.OccurredAt.UTC() // pgx отдаёт время в поясе компьютера; держим всё в UTC
-		out = append(out, t)
-	}
-	return out, rows.Err()
-}
-
 // ListClassified — операции с меткой классификатора, новые первыми.
 func (r *Repo) ListClassified(ctx context.Context, clientID string, limit int) ([]domain.ClassifiedTransaction, error) {
 	rows, err := r.db.Query(ctx, `

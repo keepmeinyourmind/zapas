@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/keepmeinyourmind/zapas/src/internal/classifier"
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
@@ -101,10 +102,12 @@ func (s *Service) ProcessTransaction(ctx context.Context, tx domain.Transaction)
 		res.IncomeKind = domain.IncomeNone
 		var confirmed map[string]bool
 		if client.Mode != domain.ModeSimple {
-			history, err := r.ListHistory(ctx, tx.ClientID, tx.ID)
+			history, err := r.ListIncomeHistory(ctx, tx.ClientID, tx.OccurredAt.Add(-classifier.Window))
 			if err != nil {
 				return err
 			}
+			// Саму новую операцию из истории убираем
+			history = slices.DeleteFunc(history, func(h domain.ClassifiedTransaction) bool { return h.ID == tx.ID })
 			if confirmed, err = r.ConfirmedSenders(ctx, tx.ClientID); err != nil {
 				return err
 			}

@@ -90,93 +90,131 @@ func day(month time.Month, d int) time.Time {
 	return time.Date(2026, month, d, 10, 0, 0, 0, time.UTC)
 }
 
-// payment — входящая выплата от организации.
-func payment(counterparty string, rubles int64, at time.Time) domain.Transaction {
-	return domain.Transaction{
-		Amount: domain.FromRubles(rubles), Type: domain.TxKindIncoming,
-		Counterparty: counterparty, CounterpartyKind: domain.CounterpartyLegal, OccurredAt: at,
+// payment — входящая выплата от организации с меткой классификатора.
+func payment(counterparty string, rubles int64, at time.Time, kind domain.IncomeKind) domain.ClassifiedTransaction {
+	return domain.ClassifiedTransaction{
+		Transaction: domain.Transaction{
+			Amount: domain.FromRubles(rubles), Type: domain.TxKindIncoming,
+			Counterparty: counterparty, CounterpartyKind: domain.CounterpartyLegal, OccurredAt: at,
+		},
+		IncomeKind: kind,
 	}
 }
 
 // Выплаты организаций: зарплата, аванс или премия — смотрим на прошлые выплаты
-// того же отправителя за последние 40 дней.
+// того же отправителя за последние 40 дней и их метки.
 func TestClassifyLegalByHistory(t *testing.T) {
 	const work = "ООО Ромашка"
 
 	tests := []struct {
 		name    string
-		history []domain.Transaction
+		history []domain.ClassifiedTransaction
 		tx      domain.Transaction
 		want    domain.IncomeKind
 	}{
 		{
 			name: "аванс не считается падением дохода",
-			history: []domain.Transaction{
-				payment(work, 10000, day(time.September, 10)),
-				payment(work, 20000, day(time.September, 25)),
+			history: []domain.ClassifiedTransaction{
+				payment(work, 10000, day(time.September, 10), domain.IncomeAdvance),
+				payment(work, 20000, day(time.September, 25), domain.IncomeSalary),
 			},
-			tx:   payment(work, 10000, day(time.October, 10)),
+			tx:   payment(work, 10000, day(time.October, 10), domain.IncomeNone).Transaction,
 			want: domain.IncomeAdvance,
 		},
 		{
 			name: "зарплата после аванса — зарплата",
-			history: []domain.Transaction{
-				payment(work, 10000, day(time.September, 10)),
-				payment(work, 20000, day(time.September, 25)),
-				payment(work, 10000, day(time.October, 10)),
+			history: []domain.ClassifiedTransaction{
+				payment(work, 10000, day(time.September, 10), domain.IncomeAdvance),
+				payment(work, 20000, day(time.September, 25), domain.IncomeSalary),
+				payment(work, 10000, day(time.October, 10), domain.IncomeAdvance),
 			},
-			tx:   payment(work, 20000, day(time.October, 25)),
+			tx:   payment(work, 20000, day(time.October, 25), domain.IncomeNone).Transaction,
 			want: domain.IncomeSalary,
 		},
 		{
 			name: "обычная зарплата при истории",
-			history: []domain.Transaction{
-				payment(work, 30000, day(time.September, 25)),
+			history: []domain.ClassifiedTransaction{
+				payment(work, 30000, day(time.September, 25), domain.IncomeSalary),
 			},
-			tx:   payment(work, 30000, day(time.October, 25)),
+			tx:   payment(work, 30000, day(time.October, 25), domain.IncomeNone).Transaction,
 			want: domain.IncomeSalary,
 		},
 		{
 			name: "премия — разовая выплата намного больше обычной",
-			history: []domain.Transaction{
-				payment(work, 30000, day(time.September, 25)),
+			history: []domain.ClassifiedTransaction{
+				payment(work, 30000, day(time.September, 25), domain.IncomeSalary),
 			},
-			tx:   payment(work, 60000, day(time.October, 25)),
+			tx:   payment(work, 60000, day(time.October, 25), domain.IncomeNone).Transaction,
 			want: domain.IncomeBonus,
 		},
 		{
 			name: "зарплата упала на 20% — всё ещё зарплата, падение оценит движок",
-			history: []domain.Transaction{
-				payment(work, 30000, day(time.September, 25)),
+			history: []domain.ClassifiedTransaction{
+				payment(work, 30000, day(time.September, 25), domain.IncomeSalary),
 			},
-			tx:   payment(work, 24000, day(time.October, 25)),
+			tx:   payment(work, 24000, day(time.October, 25), domain.IncomeNone).Transaction,
 			want: domain.IncomeSalary,
 		},
 		{
 			name: "выплаты старше 40 дней не учитываются",
-			history: []domain.Transaction{
-				payment(work, 100000, day(time.August, 1)),
+			history: []domain.ClassifiedTransaction{
+				payment(work, 100000, day(time.August, 1), domain.IncomeSalary),
 			},
-			tx:   payment(work, 30000, day(time.October, 25)),
+			tx:   payment(work, 30000, day(time.October, 25), domain.IncomeNone).Transaction,
 			want: domain.IncomeSalary,
 		},
 		{
 			name: "выплаты другой организации не учитываются",
-			history: []domain.Transaction{
-				payment("ООО Лютик", 100000, day(time.October, 1)),
+			history: []domain.ClassifiedTransaction{
+				payment("ООО Лютик", 100000, day(time.October, 1), domain.IncomeSalary),
 			},
-			tx:   payment(work, 30000, day(time.October, 25)),
+			tx:   payment(work, 30000, day(time.October, 25), domain.IncomeNone).Transaction,
 			want: domain.IncomeSalary,
 		},
 		{
 			name: "возврат от той же организации не считается выплатой",
-			history: []domain.Transaction{
-				{
+			history: []domain.ClassifiedTransaction{
+				{Transaction: domain.Transaction{
 					Amount: domain.FromRubles(100000), Type: domain.TxKindRefund,
 					Counterparty: work, CounterpartyKind: domain.CounterpartyLegal, OccurredAt: day(time.October, 1),
-				},
+				}},
 			},
-			tx:   payment(work, 30000, day(time.October, 25)),
+			tx:   payment(work, 30000, day(time.October, 25), domain.IncomeNone).Transaction,
+			want: domain.IncomeSalary,
+		},
+		{
+			name: "зарплата упала на 33% — зарплата, не аванс",
+			history: []domain.ClassifiedTransaction{
+				payment(work, 30000, day(time.September, 25), domain.IncomeSalary),
+			},
+			tx:   payment(work, 20000, day(time.October, 25), domain.IncomeNone).Transaction,
+			want: domain.IncomeSalary,
+		},
+		{
+			name: "зарплата после премии — зарплата",
+			history: []domain.ClassifiedTransaction{
+				payment(work, 30000, day(time.September, 25), domain.IncomeSalary),
+				payment(work, 60000, day(time.October, 9), domain.IncomeBonus),
+			},
+			tx:   payment(work, 30000, day(time.October, 25), domain.IncomeNone).Transaction,
+			want: domain.IncomeSalary,
+		},
+		{
+			name: "зарплата после аванса — не премия",
+			history: []domain.ClassifiedTransaction{
+				payment(work, 30000, day(time.September, 25), domain.IncomeSalary),
+				payment(work, 9000, day(time.October, 10), domain.IncomeAdvance),
+			},
+			tx:   payment(work, 30000, day(time.October, 25), domain.IncomeNone).Transaction,
+			want: domain.IncomeSalary,
+		},
+		{
+			name: "повторяющаяся «премия» — зарплата",
+			history: []domain.ClassifiedTransaction{
+				payment(work, 20000, day(time.October, 25), domain.IncomeBonus),
+				payment(work, 10000, day(time.November, 10), domain.IncomeSalary),
+			},
+			tx:   payment(work, 20000, day(time.November, 25), domain.IncomeNone).Transaction,
 			want: domain.IncomeSalary,
 		},
 	}
@@ -194,11 +232,23 @@ func TestClassifyLegalByHistory(t *testing.T) {
 // Неизвестный или пустой вид отправителя — безопасный ответ «не доход»,
 // чтобы копилка не откладывала с денег, про которые мы ничего не знаем.
 func TestUnknownCounterpartyIsNotIncome(t *testing.T) {
-	tx := domain.Transaction{
-		Amount: domain.FromRubles(30000), Type: domain.TxKindIncoming,
-		Counterparty: "Неизвестно", CounterpartyKind: "", OccurredAt: day(time.October, 25),
+	tests := []struct {
+		name string
+		kind domain.CounterpartyKind
+	}{
+		{name: "пустой вид отправителя", kind: ""},
+		{name: "неизвестный вид отправителя", kind: "government"},
 	}
-	if got := Classify(tx, nil, nil); got != domain.IncomeNone {
-		t.Errorf("Classify() = %q, want %q", got, domain.IncomeNone)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tx := domain.Transaction{
+				Amount: domain.FromRubles(30000), Type: domain.TxKindIncoming,
+				Counterparty: "Неизвестно", CounterpartyKind: tt.kind, OccurredAt: day(time.October, 25),
+			}
+			if got := Classify(tx, nil, nil); got != domain.IncomeNone {
+				t.Errorf("Classify() = %q, want %q", got, domain.IncomeNone)
+			}
+		})
 	}
 }
