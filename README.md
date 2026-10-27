@@ -1,5 +1,7 @@
 # Запас — умная копилка
 
+[![CI](https://github.com/keepmeinyourmind/zapas/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/keepmeinyourmind/zapas/actions/workflows/ci.yml)
+
 **Копилка, которая откладывает не процент от дохода, а безопасную сумму.**
 
 Проект для конкурса «Академия Финтеха 2026» (ВТБ + Финансовый университет), трек «Финтех без границ: банк будущего для бизнеса и клиентов».
