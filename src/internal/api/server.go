@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -48,7 +49,7 @@ func (s *Server) Routes() http.Handler {
 func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", s.corsOrigin)
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -81,9 +82,12 @@ func (s *Server) writeError(w http.ResponseWriter, err error) {
 	}
 }
 
-// decode читает JSON из тела запроса; неверный JSON → 400.
+// maxBody — больше запросы к API не бывают; лимит защищает сервер от огромных тел.
+const maxBody = 1 << 20 // 1 МБ
+
+// decode читает JSON из тела запроса; неверный JSON или тело больше maxBody → 400.
 func decode(r *http.Request, v any) error {
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxBody)).Decode(v); err != nil {
 		return domain.ValidationError("Некорректный JSON")
 	}
 	return nil

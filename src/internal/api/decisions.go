@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
 	"github.com/keepmeinyourmind/zapas/src/internal/service"
 )
@@ -38,6 +40,10 @@ func (s *Server) listDecisions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) answerDecision(w http.ResponseWriter, r *http.Request) {
+	if _, err := uuid.Parse(r.PathValue("id")); err != nil {
+		s.writeError(w, domain.ErrNotFound) // id решений — UUID; другой строки в базе быть не может
+		return
+	}
 	var a service.Answer
 	if err := decode(r, &a); err != nil {
 		s.writeError(w, err)

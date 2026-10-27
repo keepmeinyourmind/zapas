@@ -5,7 +5,7 @@ services:
       POSTGRES_USER: zapas
       POSTGRES_PASSWORD: zapas
       POSTGRES_DB: zapas
-    ports: ["5433:5432"]
+    ports: ["127.0.0.1:5433:5432"] # только с этого компьютера, не из локальной сети
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U zapas"]
@@ -18,16 +18,16 @@ services:
       # Внутри Docker база доступна по имени сервиса db и своему порту 5432.
       DATABASE_URL: postgres://zapas:zapas@db:5432/zapas?sslmode=disable
       CORS_ORIGIN: http://localhost:5173
-    ports: ["8080:8080"]
+    ports: ["127.0.0.1:8080:8080"]
     depends_on:
       db: { condition: service_healthy }
 
   swagger:
-    image: swaggerapi/swagger-ui
+    image: swaggerapi/swagger-ui:v5.17.14
     environment:
       SWAGGER_JSON: /spec/openapi.yaml
     volumes: ["./src/api:/spec:ro"]
-    ports: ["8081:8080"]
+    ports: ["127.0.0.1:8081:8080"]
 
 volumes:
   pgdata:

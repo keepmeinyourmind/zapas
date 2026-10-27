@@ -60,9 +60,6 @@ jobs:
       - name: Сборка
         run: go build ./...
 
-      - name: Тесты
-        run: go test -race -count=1 -p 1 ./... # -p 1: пакеты с БД не мешают друг другу
-
       - name: Миграции применяются к чистой базе
         run: |
           go build -o /tmp/server ./cmd/server
@@ -73,6 +70,10 @@ jobs:
           done
           cat /tmp/server.log
           curl -sf localhost:18080/health
+          kill $!
+
+      - name: Тесты
+        run: go test -race -count=1 -p 1 ./... # -p 1: пакеты с БД не мешают друг другу
 
   docker:
     name: docker compose и демо-сценарии
