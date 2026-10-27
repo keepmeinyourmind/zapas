@@ -109,7 +109,7 @@ HTTP → internal/api → internal/service ─┬─ internal/classifier   до�
 | `DATABASE_URL` | `postgres://zapas:zapas@localhost:5433/zapas?sslmode=disable` |
 | `HTTP_ADDR` | `:8080` |
 | `CORS_ORIGIN` | `http://localhost:5173` |
-| `DROP_THRESHOLD`, `RAISE_THRESHOLD` | `0.15` |
+| `DROP_THRESHOLD_PCT`, `RAISE_THRESHOLD_PCT` | `15` (отклонение дохода, %) |
 | `BUFFER_RUB` | `0` |
 
 Порт базы на хосте — 5433, чтобы не конфликтовать с локальным PostgreSQL на 5432.

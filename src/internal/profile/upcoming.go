@@ -6,19 +6,12 @@ import (
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
 )
 
-// Due — одно предстоящее списание.
-type Due struct {
-	Counterparty string
-	Amount       domain.Money
-	At           time.Time
-}
-
 // UpcomingResult — сколько денег понадобится от now до until.
 type UpcomingResult struct {
 	Total    domain.Money // Payments + Spending
 	Payments domain.Money // обязательные платежи
 	Spending domain.Money // повседневные траты
-	Nearest  *Due         // ближайший обязательный платёж, nil — если его нет; для текста причины
+	Nearest  *domain.Due  // ближайший обязательный платёж, nil — если его нет; для текста причины
 }
 
 // Upcoming считает, сколько денег понадобится от now до until (обычно — до следующего дохода):
@@ -44,7 +37,7 @@ func Upcoming(recurring []domain.RecurringPayment, declaredMonthly, daily domain
 		for due := nextDue(p, now); !due.After(until); due = addMonth(due, p.DayOfMonth) {
 			res.Payments += p.Amount
 			if res.Nearest == nil || due.Before(res.Nearest.At) {
-				res.Nearest = &Due{Counterparty: p.Counterparty, Amount: p.Amount, At: due}
+				res.Nearest = &domain.Due{Counterparty: p.Counterparty, Amount: p.Amount, At: due}
 			}
 		}
 	}

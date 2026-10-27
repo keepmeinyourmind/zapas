@@ -136,15 +136,17 @@ const (
 type DecisionAction string
 
 const (
-	DecisionAuto         DecisionAction = "auto"
-	DecisionAsk          DecisionAction = "ask"
-	DecisionSkip         DecisionAction = "skip"
-	DecisionSuggestRaise DecisionAction = "suggest_raise"
+	DecisionAuto          DecisionAction = "auto"
+	DecisionAsk           DecisionAction = "ask"
+	DecisionSkip          DecisionAction = "skip"
+	DecisionSuggestRaise  DecisionAction = "suggest_raise"
+	DecisionConfirmIncome DecisionAction = "confirm_income" // вопрос «это ваш доход?»
 )
 
 type DecisionStatus string
 
 const (
+	DecisionQueued   DecisionStatus = "queued" // ждёт, пока клиент ответит на предыдущий вопрос
 	DecisionPending  DecisionStatus = "pending"
 	DecisionExecuted DecisionStatus = "executed"
 	DecisionSkipped  DecisionStatus = "skipped"
@@ -162,6 +164,7 @@ type Decision struct {
 	Status     DecisionStatus `json:"status"`
 	CreatedAt  time.Time      `json:"created_at"`
 	ExpiresAt  *time.Time     `json:"expires_at,omitempty"`
+	NotifyAt   *time.Time     `json:"notify_at,omitempty"` // когда уведомить клиента с учётом тихих часов
 }
 
 // ---------- Перевод ----------

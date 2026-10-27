@@ -21,3 +21,10 @@ type RecurringPayment struct {
 	DayOfMonth   int       // в какой день месяца обычно списывается
 	LastAt       time.Time // когда списался последний раз
 }
+
+// Due — одно предстоящее обязательное списание.
+type Due struct {
+	Counterparty string
+	Amount       Money
+	At           time.Time
+}
