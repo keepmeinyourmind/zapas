@@ -72,8 +72,8 @@ var all = map[string]Scenario{
 		Onboarding: withoutAnalysis(anyaForm()), Event: salary("simple_mode", 24000),
 	},
 	"income_rise": {
-		Name: "income_rise", Description: "Доход вырос: пришло 36 000 ₽ вместо 30 000",
-		History: anyaHistory(30000), Card: domain.FromRubles(2000), Savings: domain.FromRubles(15000),
+		Name: "income_rise", Description: "Доход растёт третий месяц: снова 36 000 ₽ вместо обычных 30 000",
+		History: withSalary(anyaHistory(30000), 36000, time.August, time.September), Card: domain.FromRubles(2000), Savings: domain.FromRubles(15000),
 		Onboarding: anyaForm(), Event: salary("income_rise", 36000),
 	},
 }
@@ -94,6 +94,19 @@ func salary(scenario string, rubles int64) domain.Transaction {
 		ID: scenario + "-event", Amount: domain.FromRubles(rubles), Type: domain.TxKindIncoming,
 		Counterparty: employer, CounterpartyKind: domain.CounterpartyLegal, OccurredAt: EventAt,
 	}
+}
+
+// withSalary — та же история, но зарплата в указанные месяцы другая.
+// Обычный доход (медиана за полгода) при этом остаётся 30 000 ₽: высоких месяцев меньше половины.
+func withSalary(h []domain.ClassifiedTransaction, rubles int64, months ...time.Month) []domain.ClassifiedTransaction {
+	for i, tx := range h {
+		for _, m := range months {
+			if tx.IncomeKind == domain.IncomeSalary && tx.OccurredAt.Month() == m {
+				h[i].Amount = domain.FromRubles(rubles)
+			}
+		}
+	}
+	return h
 }
 
 // withoutAnalysis — та же анкета, но без согласия на анализ доходов: простой режим.

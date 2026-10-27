@@ -55,6 +55,22 @@ func TestAnyaNumbers(t *testing.T) {
 	}
 }
 
+// income_rise: обычный доход по-прежнему 30 000 ₽, а две прошлые зарплаты — 36 000 ₽.
+// Вместе с событием это третий месяц роста — движок предложит поднять процент.
+func TestIncomeRiseIsThirdMonth(t *testing.T) {
+	s, _ := Get("income_rise")
+	history := append(s.History, domain.ClassifiedTransaction{Transaction: s.Event, IncomeKind: domain.IncomeSalary})
+
+	p, _ := profile.Build(history, profile.Options{CurrentTxID: s.Event.ID, DeclaredIncome: s.Onboarding.MonthlyIncome}, EventAt)
+	if got := p.ExpectedFor(domain.IncomeSalary); got != domain.FromRubles(30000) {
+		t.Errorf("обычный доход %v, want 30 000 ₽", got)
+	}
+	prev := p.Previous[domain.IncomeSalary]
+	if len(prev) != 2 || prev[0] != domain.FromRubles(36000) || prev[1] != domain.FromRubles(36000) {
+		t.Errorf("прошлые зарплаты %v, want [36 000 ₽ 36 000 ₽]", prev)
+	}
+}
+
 func TestScenarioEventsAreUnique(t *testing.T) {
 	seen := map[string]string{}
 	for _, name := range Names() {
