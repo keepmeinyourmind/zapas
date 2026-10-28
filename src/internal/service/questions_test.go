@@ -116,6 +116,14 @@ func TestConfirmIncomeSkippedWhenPaused(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
+		{"до цели меньше минимального перевода", func(t *testing.T, _ *Service, store *storage.Store) {
+			ctx := context.Background()
+			if err := store.InTx(ctx, func(r *storage.Repo) error {
+				return r.SetBalances(ctx, "anya", 0, domain.FromRubles(35950))
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}},
 		{"меньше min_income", func(t *testing.T, s *Service, _ *storage.Store) {
 			putRule(t, s, func(r *domain.SavingsRule) { r.MinIncome = domain.FromRubles(10000) })
 		}},

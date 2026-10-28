@@ -140,8 +140,8 @@ func Decide(in Input, cfg Config) domain.Decision {
 		return skip("Копилка на паузе")
 	}
 
-	// 3. Цель уже накоплена.
-	if in.Client.SavingsBalance >= in.Rule.GoalAmount {
+	// 3. Цель уже накоплена: до неё осталось меньше минимального перевода — добавить нечего.
+	if goalLeft(in) < in.Rule.MinTransfer {
 		return skip("Цель достигнута — поздравляем!")
 	}
 

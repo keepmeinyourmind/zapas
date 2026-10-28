@@ -48,7 +48,7 @@ func (s *Service) decide(ctx context.Context, r *storage.Repo, client domain.Cli
 		}
 
 	case !client.Arrested && tx.CounterpartyKind == domain.CounterpartyPerson && !confirmed[tx.Counterparty] &&
-		!rule.Paused && client.SavingsBalance < rule.GoalAmount && tx.Amount >= rule.MinIncome:
+		!rule.Paused && rule.GoalAmount-client.SavingsBalance >= rule.MinTransfer && tx.Amount >= rule.MinIncome:
 		// Перевод от незнакомого физлица: не решаем молча, а спрашиваем «это ваш доход?».
 		// Если откладывать всё равно не будем (пауза, цель достигнута, мелкое поступление) — не спрашиваем.
 		d = domain.Decision{

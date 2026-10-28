@@ -45,6 +45,7 @@ func TestDecideSkips(t *testing.T) {
 		{"счёт арестован", func(in *Input) { in.Client.Arrested = true }, "арестован"},
 		{"копилка на паузе", func(in *Input) { in.Rule.Paused = true }, "пауз"},
 		{"цель достигнута", func(in *Input) { in.Client.SavingsBalance = domain.FromRubles(36000) }, "цель"},
+		{"до цели меньше минимального перевода — цель достигнута", func(in *Input) { in.Client.SavingsBalance = domain.FromRubles(35950) }, "цель"},
 		{"не доход", func(in *Input) { in.Kind = domain.IncomeNone }, "не доход"},
 		{"поступление меньше порога клиента", func(in *Input) { in.Tx.Amount = domain.FromRubles(2000) }, "меньше 3 000 ₽ не трогаем"},
 	}
@@ -167,12 +168,6 @@ func TestDecideSafeAmount(t *testing.T) {
 			edit:       func(in *Input) { in.Client.SavingsBalance = domain.FromRubles(33500) },
 			cfg:        cfg,
 			wantAction: domain.DecisionAuto, wantAmount: domain.FromRubles(2500), wantReason: "обычн",
-		},
-		{
-			name:       "до цели осталось 50 ₽ — меньше минимального перевода, не откладываем",
-			edit:       func(in *Input) { in.Client.SavingsBalance = domain.FromRubles(35950) },
-			cfg:        cfg,
-			wantAction: domain.DecisionSkip, wantAmount: 0, wantReason: "меньше 100 ₽ не будем",
 		},
 		{
 			name: "10% с поступления меньше 100 ₽ — дело не в платежах",
@@ -508,8 +503,8 @@ func TestDecideExplanation(t *testing.T) {
 			wantPhrases: []string{"− неприкосновенный остаток 500 ₽ = 500 ₽"},
 		},
 		{
-			name: "безопасно больше минимума, но до цели 50 ₽ — первая строка про безопасную сумму",
-			edit: func(in *Input) { in.Client.SavingsBalance = domain.FromRubles(35950) },
+			name: "безопасно больше минимума, но 10% с поступления — 90 ₽: первая строка про безопасную сумму",
+			edit: func(in *Input) { in.Rule.MinIncome, in.Tx.Amount = 0, domain.FromRubles(900) },
 			cfg:  cfg, wantSafe: domain.FromRubles(1000),
 			wantPhrases: []string{"можно безопасно отложить до 1 000 ₽"},
 		},
