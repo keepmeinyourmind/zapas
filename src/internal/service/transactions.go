@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/keepmeinyourmind/zapas/src/internal/classifier"
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
@@ -77,7 +78,7 @@ func (s *Service) ProcessTransaction(ctx context.Context, tx domain.Transaction)
 			if err != nil {
 				return err
 			}
-			if stored.ClientID != tx.ClientID || stored.Amount != tx.Amount || stored.Type != tx.Type {
+			if !sameTx(stored, tx) {
 				return domain.ErrIDConflict
 			}
 			if res.IncomeKind, err = r.GetIncomeKind(ctx, tx.ID); err != nil {
@@ -146,4 +147,12 @@ func (s *Service) ListTransactions(ctx context.Context, clientID string, limit i
 		return nil, err
 	}
 	return repo.ListClassified(ctx, clientID, limit)
+}
+
+// sameTx — повтор той же операции: совпадают все поля, которые прислал банк.
+// Время сравниваем с точностью до микросекунды — так его хранит PostgreSQL.
+func sameTx(stored, tx domain.Transaction) bool {
+	return stored.ClientID == tx.ClientID && stored.Amount == tx.Amount && stored.Type == tx.Type &&
+		stored.Counterparty == tx.Counterparty && stored.CounterpartyKind == tx.CounterpartyKind &&
+		stored.OccurredAt.Equal(tx.OccurredAt.Truncate(time.Microsecond))
 }

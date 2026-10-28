@@ -81,6 +81,10 @@ func TestSameTxIDWithOtherDataIsConflict(t *testing.T) {
 	otherAmount := incoming("t-1", "ООО Ромашка", domain.CounterpartyLegal, 31000)
 	otherType := incoming("t-1", "ООО Ромашка", domain.CounterpartyLegal, 30000)
 	otherType.Type = domain.TxKindRefund
+	otherSender := incoming("t-1", "ООО Лютик", domain.CounterpartyLegal, 30000)
+	otherKind := incoming("t-1", "ООО Ромашка", domain.CounterpartyPerson, 30000)
+	otherTime := incoming("t-1", "ООО Ромашка", domain.CounterpartyLegal, 30000)
+	otherTime.OccurredAt = otherTime.OccurredAt.Add(time.Hour)
 
 	cases := []struct {
 		name string
@@ -89,6 +93,9 @@ func TestSameTxIDWithOtherDataIsConflict(t *testing.T) {
 		{"другой клиент", foreign},
 		{"другая сумма", otherAmount},
 		{"другой тип", otherType},
+		{"другой отправитель", otherSender},
+		{"другой вид отправителя", otherKind},
+		{"другое время", otherTime},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -232,5 +239,21 @@ func TestSpendingLoanMoneyKeepsOwnBalance(t *testing.T) {
 	}
 	if card, _ := balances(t, store); card != 0 {
 		t.Errorf("свои деньги на карте %v, want 0: покупка оплачена кредитом", card)
+	}
+}
+
+// PostgreSQL хранит время с точностью до микросекунды: повтор с наносекундами — тот же повтор.
+func TestRetryWithNanosecondsIsNotConflict(t *testing.T) {
+	s, _, _ := testService(t)
+	subscribe(t, s)
+	ctx := context.Background()
+
+	tx := incoming("t-1", "ООО Ромашка", domain.CounterpartyLegal, 30000)
+	tx.OccurredAt = tx.OccurredAt.Add(123456789 * time.Nanosecond)
+	if _, _, err := s.ProcessTransaction(ctx, tx); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.ProcessTransaction(ctx, tx); err != nil {
+		t.Errorf("повтор той же операции: %v, want без ошибки", err)
 	}
 }
