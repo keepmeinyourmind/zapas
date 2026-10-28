@@ -286,6 +286,21 @@ func TestDecideIncomeChanges(t *testing.T) {
 			wantAction: domain.DecisionAuto, wantAmount: domain.FromRubles(1000), wantReason: "обычн",
 		},
 		{
+			name:       "фриланс впервые, доверие высокое — не с чем сравнить, спрашиваем",
+			edit:       func(in *Input) { in.Kind, in.Tx.Amount = domain.IncomeFreelance, domain.FromRubles(5000) },
+			wantAction: domain.DecisionAsk, wantAmount: domain.FromRubles(500), wantReason: "приходит впервые",
+			wantOptions: []domain.Money{domain.FromRubles(500)},
+		},
+		{
+			name: "аванс впервые, доверие среднее — тоже спрашиваем",
+			edit: func(in *Input) {
+				in.Profile.Trust = domain.TrustLevelMid
+				in.Kind, in.Tx.Amount, in.Client.CardBalance = domain.IncomeAdvance, domain.FromRubles(10000), domain.FromRubles(12000)
+				in.Upcoming = domain.FromRubles(5000)
+			},
+			wantAction: domain.DecisionAsk, wantAmount: domain.FromRubles(1000), wantReason: "приходит впервые",
+		},
+		{
 			name: "впереди платёж урезал сумму — спрашиваем и называем платёж",
 			edit: func(in *Input) {
 				in.Upcoming, in.Nearest = domain.FromRubles(30500), rassrochka // безопасно 1 500 < 3 000
@@ -381,14 +396,6 @@ func TestDecideIncomeChanges(t *testing.T) {
 				}
 			},
 			wantAction: domain.DecisionAsk, wantAmount: domain.FromRubles(3600), wantReason: "выше обычного на 20%",
-		},
-		{
-			name: "первый доход такого вида — сравнить не с чем, переводим",
-			edit: func(in *Input) {
-				in.Kind, in.Tx.Amount, in.Client.CardBalance = domain.IncomeFreelance, domain.FromRubles(5000), domain.FromRubles(25000)
-				in.Upcoming = domain.FromRubles(10000)
-			},
-			wantAction: domain.DecisionAuto, wantAmount: domain.FromRubles(500), wantReason: "обычн",
 		},
 	}
 	for _, tt := range tests {

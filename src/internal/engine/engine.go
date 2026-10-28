@@ -191,7 +191,7 @@ func decideAmount(in Input, cfg Config, safe, want, amount domain.Money) domain.
 		return ask(amount, []domain.Money{amount}, fmt.Sprintf("Мы ещё изучаем ваш доход. Отложить %s?", amount))
 	}
 	// Насколько поступление отличается от обычного дохода такого вида.
-	// Аванс сравниваем с авансами, зарплату — с зарплатами. Не с чем сравнить — считаем обычным.
+	// Аванс сравниваем с авансами, зарплату — с зарплатами.
 	expected := in.Profile.ExpectedFor(in.Kind)
 	drop := expected > 0 && below(in.Tx.Amount, expected, cfg.DropPct)
 	rise := expected > 0 && above(in.Tx.Amount, expected, cfg.RaisePct)
@@ -216,7 +216,12 @@ func decideAmount(in Input, cfg Config, safe, want, amount domain.Money) domain.
 		return ask(amount, []domain.Money{amount}, upcomingReason(in, amount))
 	}
 
-	// 4. Доход заметно выше обычного. Поднять процент предлагаем, только если доход вырос третий месяц
+	// 4. Такого дохода раньше не было — не с чем сравнить, поэтому не решаем молча.
+	if expected == 0 {
+		return ask(amount, []domain.Money{amount}, fmt.Sprintf("Такой доход приходит впервые. Отложить %s?", amount))
+	}
+
+	// 5. Доход заметно выше обычного. Поднять процент предлагаем, только если доход вырос третий месяц
 	// подряд и выводам доверяем: один-два высоких месяца могут быть случайностью — тогда спрашиваем.
 	if rise {
 		dev := roundPct(in.Tx.Amount, expected)
