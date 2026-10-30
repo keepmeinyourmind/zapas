@@ -16,6 +16,7 @@ import (
 	"github.com/keepmeinyourmind/zapas/src/internal/api"
 	"github.com/keepmeinyourmind/zapas/src/internal/clock"
 	"github.com/keepmeinyourmind/zapas/src/internal/config"
+	"github.com/keepmeinyourmind/zapas/src/internal/middleware"
 	"github.com/keepmeinyourmind/zapas/src/internal/scenarios"
 	"github.com/keepmeinyourmind/zapas/src/internal/service"
 	"github.com/keepmeinyourmind/zapas/src/internal/storage"
@@ -75,9 +76,18 @@ func run(log *slog.Logger) error {
 		}
 	}()
 
+	// Rate Limiting: 100 запросов в минуту на один IP
+	rateLimiter := middleware.NewRateLimiter(100, time.Minute)
+
+	// Запускаем фоновую очистку старых записей (каждые 10 минут)
+	go rateLimiter.Cleanup(10 * time.Minute)
+
 	// Таймауты: медленный или зависший клиент не держит соединение бесконечно.
 	srv := &http.Server{
-		Addr: cfg.HTTPAddr, Handler: handler.Routes(),
+		Addr: cfg.HTTPAddr,
+		Handler: rateLimiter.Middleware(
+			middleware.SecurityHeaders(handler.Routes()),
+		),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
