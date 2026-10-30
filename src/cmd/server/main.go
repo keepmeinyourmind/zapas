@@ -86,7 +86,9 @@ func run(log *slog.Logger) error {
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: rateLimiter.Middleware(
-			middleware.SecurityHeaders(handler.Routes()),
+			middleware.SecurityHeaders(
+				middleware.ProductionGuard(handler.Routes()),
+			),
 		),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
