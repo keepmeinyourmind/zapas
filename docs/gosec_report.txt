@@ -1,0 +1,10 @@
+Results:
+
+
+[1;36mSummary:[0m
+  Gosec  : 2.30.0
+  Files  : 46
+  Lines  : 4142
+  Nosec  : 0
+  Issues : [1;32m0[0m
+
