@@ -1,0 +1,27 @@
+html, body, #root { min-height: 100%; }
+button:disabled { cursor: default; opacity: .5; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--app-blue); outline-offset: 3px; }
+.toast { z-index: 1100; display: block; }
+.state-message { padding: 20px 0; color: var(--app-muted); font-size: 13px; }
+.form-error { color: #f0aaa5; font-size: 13px; }
+.status-notice { border: 1px solid var(--app-border); border-radius: 9px; background: var(--app-panel); padding: 14px 16px; color: #c5c8cd; font-size: 13px; }
+.status-notice a { color: var(--app-blue); }
+.decision-row + .decision-row { border-top: 1px solid var(--app-border); }
+.summary-text { white-space: pre-line; }
+.money-history-copy, .recurring-row .col { overflow-wrap: anywhere; }
+.menu-option { text-decoration: none; }
+.modal-footer .reference-button { margin-inline: 0; }
+.form-advanced summary { color: var(--app-blue); font-size: 13px; cursor: pointer; }
+.connection-note { font-size: 12px; color: var(--app-muted); }
+.stat-label { line-height: 18px; }
+.stat-value { font-variant-numeric: tabular-nums; }
+.custom-amount { width: 160px; }
+@media (max-width: 400px) {
+  .stat-card .card-body { padding: 12px !important; }
+  .stat-label { min-height: 36px; font-size: 11px; }
+  .stat-label-with-info { gap: 2px; }
+  .stat-info { width: 24px; height: 24px; flex-basis: 24px; }
+  .stat-value { font-size: 19px; }
+  .transaction-name, .money-history-copy .transaction-name, .transaction-amount { font-size: 14px; }
+  .recurring-label { font-size: 11px; }
+}
