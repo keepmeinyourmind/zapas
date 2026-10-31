@@ -99,6 +99,13 @@ jobs:
           check new_client    ask           300000
           check income_rise   suggest_raise 360000
 
+      - name: Фронтенд и прокси API работают
+        run: |
+          curl -sf localhost:5173 | grep -q '<div id="root"></div>'
+          curl -sf localhost:5173/savings | grep -q '<div id="root"></div>'
+          curl -sf localhost:5173/health | jq -e '.status == "ok"'
+          curl -sf localhost:5173/api/clients/anya/savings | jq -e '.client_id == "anya"'
+
       - name: Swagger UI открывается
         run: curl -sf -o /dev/null localhost:8081
 

@@ -1,0 +1,9 @@
+node_modules
+.npm-cache
+.vite
+dist
+test-results
+playwright-report
+blob-report
+artifacts
+.env*

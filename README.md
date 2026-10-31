@@ -44,15 +44,37 @@
 Нужен только Docker.
 
 ```bash
-git clone https://github.com/keepmeinyourmind/zapas.git && cd zapas
+git clone --branch dev https://github.com/keepmeinyourmind/zapas.git && cd zapas
 docker compose up -d --build --wait
 ```
 
-Поднимутся PostgreSQL, бэкенд (миграции применяются сами) и Swagger UI:
+Фронтенд и бэкенд находятся вместе в ветке `dev`; отдельные ветки, Node.js и Go для запуска не нужны.
+Поднимутся PostgreSQL, бэкенд (миграции применяются сами), фронтенд и Swagger UI:
+- Интерфейс: http://localhost:5173
+- Демо-панель: http://localhost:5173/demo
 - API: http://localhost:8080 — проверка `curl localhost:8080/health` → `{"status":"ok"}`
 - Swagger UI с описанием и кнопкой «Try it out»: http://localhost:8081
 
 Остановить: `docker compose down` (с удалением данных — `docker compose down -v`).
+
+Обновление существующей установки:
+
+```bash
+git switch dev
+git pull --ff-only
+docker compose up -d --build --wait
+```
+
+Сценарии не запускаются автоматически: на пустой базе можно пройти анкету либо выбрать сценарий в демо-панели.
+Чтобы отключить демо-панель и серверные отладочные маршруты:
+
+```bash
+ENV=production VITE_ENABLE_DEMO_TOOLS=false docker compose up -d --build --wait
+```
+
+Параметры можно сохранить в `.env` по образцу `.env.example`. Переключение режима не удаляет данные.
+Для локальной разработки фронтенда: `cd frontend && npm ci && npm run dev`.
+Перед этим остановите контейнер интерфейса командой `docker compose stop frontend`, чтобы освободить порт 5173.
 
 ## Демо за 2 минуты
 

@@ -5,7 +5,7 @@ services:
       POSTGRES_USER: zapas
       POSTGRES_PASSWORD: zapas
       POSTGRES_DB: zapas
-    ports: ["127.0.0.1:5433:5432"] # только с этого компьютера, не из локальной сети
+    ports: ["127.0.0.1:${DB_PORT:-5433}:5432"] # только с этого компьютера, не из локальной сети
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U zapas"]
@@ -19,16 +19,26 @@ services:
       DATABASE_URL: postgres://zapas:zapas@db:5432/zapas?sslmode=disable
       CORS_ORIGIN: http://localhost:5173
       ENV: ${ENV:-development}
-    ports: ["127.0.0.1:8080:8080"]
+    ports: ["127.0.0.1:${API_PORT:-8080}:8080"]
     depends_on:
       db: { condition: service_healthy }
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_ENABLE_DEMO_TOOLS: ${VITE_ENABLE_DEMO_TOOLS:-true}
+        VITE_CLIENT_ID: ${VITE_CLIENT_ID:-anya}
+    ports: ["127.0.0.1:${FRONTEND_PORT:-5173}:80"]
+    depends_on:
+      backend: { condition: service_healthy }
 
   swagger:
     image: swaggerapi/swagger-ui:v5.17.14
     environment:
       SWAGGER_JSON: /spec/openapi.yaml
     volumes: ["./src/api:/spec:ro"]
-    ports: ["127.0.0.1:8081:8080"]
+    ports: ["127.0.0.1:${SWAGGER_PORT:-8081}:8080"]
 
 volumes:
   pgdata:
