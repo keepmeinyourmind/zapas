@@ -158,6 +158,11 @@
       color: #b8d0ff;
       background: #202f49;
     }
+    .savings-state.restricted { color: #ffda6a; border-color: #997404; background: #332701; }
+    .decision-notice { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 20px; height: 20px; margin-left: auto; border-radius: 50%; background: #4679ed; color: #fff; }
+    .decision-notice svg { display: block; width: 20px; height: 20px; }
+    .decision-notice svg path { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+    .decision-notice svg circle { fill: currentColor; stroke: none; }
     .savings-amount { margin: 24px 0 1px; color: white; font-size: clamp(36px, 4vw, 46px); font-weight: 500; letter-spacing: -.8px; line-height: 1.05; }
     .savings-amount small { font-size: .48em; }
     .savings-caption { color: #b3bfce; font-size: 11px; }
@@ -276,7 +281,13 @@
     .recurring-row { border-bottom: 1px solid var(--app-border); }
     .recurring-row:last-child { border-bottom: 0; }
     .form-switch .form-check-input { width: 2em; }
+    .form-switch .recurring-toggle { width: 46px; height: 26px; margin-top: 0; cursor: pointer; background-color: #343b46; border-color: #566172; }
+    .form-switch .recurring-toggle:checked { background-color: #4679ed; border-color: #4679ed; }
+    .form-switch .recurring-toggle:focus { border-color: #7ba2ff; box-shadow: 0 0 0 3px rgb(70 121 237 / 25%); }
+    .form-switch .recurring-toggle:disabled { cursor: wait; }
     .onboarding-card { max-width: 690px; }
+    .decision-push { position: fixed; right: 20px; bottom: 20px; z-index: 30; width: min(360px, calc(100vw - 32px)); padding: 18px; border: 1px solid #4679ed; border-radius: 12px; background: #1c2639; color: #edf3ff; box-shadow: 0 8px 30px #0005; }
+    .decision-push .section-link { font-size: 24px; line-height: 1; }
     .toast { position: fixed; right: 20px; bottom: 20px; z-index: 20; max-width: min(380px, calc(100vw - 32px)); padding: 12px 15px; border: 1px solid #405249; border-radius: 7px; color: #dce8df; background: #1c2821; font-size: 12px; opacity: 0; transform: translateY(8px); transition: .18s; pointer-events: none; }
     .toast.visible { opacity: 1; transform: translateY(0); }
     @media (max-width: 575.98px) {

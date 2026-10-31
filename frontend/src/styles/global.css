@@ -1,4 +1,11 @@
 html, body, #root { min-height: 100%; }
+input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.recurring-empty .state-message { padding: 4px 0; }
+.consent-link { font-size: inherit; text-decoration: underline; }
+.crumb a { color: inherit; text-decoration: none; }
+.crumb a:hover { text-decoration: underline; }
 button:disabled { cursor: default; opacity: .5; }
 button:focus-visible, a:focus-visible { outline: 2px solid var(--app-blue); outline-offset: 3px; }
 .toast { z-index: 1100; display: block; }
