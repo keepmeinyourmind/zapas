@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111315">
+  <title>Запас — личный кабинет</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <style>
+    :root {
+      color-scheme: dark;
+      --app-bg: #111315;
+      --app-panel: #191c1f;
+      --app-panel-raised: #202428;
+      --app-border: #2c3034;
+      --app-text: #e7e9eb;
+      --app-muted: #9b9fa4;
+      --app-blue: #83aefc;
+      --app-green: #8bc9a5;
+      --bs-body-bg: var(--app-bg);
+      --bs-body-color: var(--app-text);
+      --bs-border-color: var(--app-border);
+      --bs-secondary-color: var(--app-muted);
+      --bs-primary: #82aaff;
+      --bs-primary-rgb: 130, 170, 255;
+      --bs-link-color: #9bb9f5;
+      --bs-link-hover-color: #c1d1f4;
+      --bs-font-sans-serif: "Roboto", Arial, sans-serif;
+      font-family: var(--bs-font-sans-serif);
+    }
+
+    * { box-sizing: border-box; }
+    body { min-width: 320px; min-height: 100vh; background: var(--app-bg); font-size: 14px; }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .app-shell { min-height: 100vh; }
+    .brand { color: var(--app-text); font-size: 19px; font-weight: 600; letter-spacing: -.3px; }
+    .main-area { min-width: 0; }
+    .topbar { min-height: 58px; background: #151719; border-bottom: 1px solid var(--app-border); }
+    .crumb { color: #92979d; font-size: 12px; }
+    .crumb strong { color: #d7d9dc; font-weight: 500; }
+    .back-button { display: inline-flex; align-items: center; gap: 5px; padding: 2px 0; border: 0; color: #83aefc; background: transparent; font-size: 14px; }
+    .back-button:hover { color: #b4ccf5; }
+    .back-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+    .content-wrap { width: min(1120px, 100%); }
+    .home-column { width: min(640px, calc(100vw - 32px)); margin-inline: auto; overflow-x: clip; }
+    .view:not(#view-home), #back-to-home { width: min(640px, calc(100vw - 32px)); margin-inline: auto; overflow-x: clip; }
+    .menu-wrap { width: 100%; }
+    .menu-panel {
+      --bs-card-bg: #191c1f;
+      --bs-card-border-color: transparent;
+      --bs-card-border-radius: 20px;
+      padding: 12px;
+    }
+    .menu-option {
+      display: flex;
+      min-height: 66px;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 10px;
+      border: 0;
+      border-radius: 10px;
+      color: #e7e9eb;
+      background: transparent;
+      text-align: left;
+      transition: background-color .15s ease;
+    }
+    .menu-option:hover { color: #fff; background: #222629; }
+    .menu-option.active { color: #f2f5fa; background: #252a2f; }
+    .menu-option-icon {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      flex: 0 0 42px;
+      place-items: center;
+      border-radius: 10px;
+      color: #e0e3e7;
+      background: #292d31;
+    }
+    .menu-option-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+    .menu-option-label { font-size: 13px; font-weight: 500; line-height: 1.3; }
+    .page-title { margin: 0; color: #f0f1f2; font-size: 25px; font-weight: 500; letter-spacing: -.45px; }
+    .page-description { margin: 5px 0 0; color: var(--app-muted); font-size: 13px; }
+    .card {
+      --bs-card-bg: var(--app-panel);
+      --bs-card-color: var(--app-text);
+      --bs-card-border-color: var(--app-border);
+      --bs-card-border-radius: 9px;
+      --bs-card-box-shadow: none;
+      box-shadow: none;
+    }
+    .card-header { border-bottom-color: var(--app-border); }
+    .savings-card {
+      color: #f3f5f8;
+      border: 1px solid #24272b;
+      border-radius: 22px;
+      background: #191b1f;
+    }
+    .savings-overview { width: min(100%, 640px); margin-inline: auto; }
+    .savings-overview .card-body { padding: 28px !important; }
+    .savings-overview-top { min-height: 45px; }
+    .savings-overview-heading { min-width: 0; }
+    .savings-overview-heading-copy { min-width: 0; }
+    .savings-overview-heading .savings-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .savings-overview-center { width: min(100%, 420px); margin: 10px auto 0; text-align: center; }
+    .savings-overview .savings-label { color: #d7d9dd; font-size: 15px; font-weight: 600; }
+    .savings-overview .savings-name { margin-top: 4px; color: #969ba2; font-size: 12px; }
+    .savings-overview .savings-amount { margin: 30px 0 2px; font-size: clamp(42px, 6vw, 52px); letter-spacing: -1.2px; }
+    .savings-overview .savings-caption { color: #a7abb1; font-size: 12px; }
+    .savings-overview .goal-row { margin-top: 26px !important; }
+    .savings-overview .progress { background: #30343a; }
+    .savings-overview .progress-bar { background: #4b8df5; }
+    .savings-overview .savings-actions { margin-top: 28px; }
+    .savings-action {
+      display: flex;
+      min-width: 96px;
+      flex-direction: column;
+      align-items: center;
+      gap: 7px;
+      padding: 0 8px;
+      border: 0;
+      color: #e3e5e8;
+      background: transparent;
+      font-size: 12px;
+    }
+    .savings-action-icon {
+      display: grid;
+      width: 46px;
+      height: 46px;
+      place-items: center;
+      border-radius: 50%;
+      color: #fff;
+      background: #347ef0;
+      transition: background-color .15s ease, transform .15s ease;
+    }
+    .savings-overview .savings-actions { align-items: flex-start; }
+    .savings-action { min-height: 72px; justify-content: flex-start; }
+    .savings-action:hover .savings-action-icon { background: #4d91ff; transform: translateY(-1px); }
+    .savings-action-icon svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+    @media (max-width: 575.98px) {
+      .savings-overview .card-body { padding: 20px !important; }
+      .savings-overview-center { margin-top: 10px; }
+      .savings-overview .savings-amount { margin-top: 26px; }
+      .savings-overview .goal-row { margin-top: 23px !important; }
+      .savings-overview .savings-actions { margin-top: 20px; }
+    }
+    .savings-label { color: #b2bfce; font-size: 12px; }
+    .savings-name { margin-top: 5px; font-size: 14px; font-weight: 500; }
+    .savings-state,
+    .decision-status {
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: center;
+      padding: 5px 9px;
+      border: 1px solid #454a50;
+      border-radius: 999px;
+      color: #c1c5ca;
+      background: #292d31;
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+    .savings-state:not(.paused),
+    .decision-status.done {
+      border-color: #365a91;
+      color: #b8d0ff;
+      background: #202f49;
+    }
+    .savings-amount { margin: 24px 0 1px; color: white; font-size: clamp(36px, 4vw, 46px); font-weight: 500; letter-spacing: -.8px; line-height: 1.05; }
+    .savings-amount small { font-size: .48em; }
+    .savings-caption { color: #b3bfce; font-size: 11px; }
+    .goal-row { margin-bottom: 12px !important; color: #e7e9eb; font-size: 14px; font-weight: 500; line-height: 1.5; flex-wrap: wrap; text-align: left; }
+    .goal-row > span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .goal-row b { color: inherit; font-size: inherit; font-weight: 600; }
+    .progress { height: 10px; border-radius: 6px; background: #354354; }
+    .progress-bar { background: #b6c8df; }
+    .savings-rule { color: #c4cfdd; font-size: 11px; }
+    .btn-primary {
+      --bs-btn-color: #121b28;
+      --bs-btn-bg: #a8c3ea;
+      --bs-btn-border-color: #a8c3ea;
+      --bs-btn-hover-color: #111b2b;
+      --bs-btn-hover-bg: #bbd0f0;
+      --bs-btn-hover-border-color: #bbd0f0;
+      --bs-btn-active-bg: #93aed7;
+      --bs-btn-active-border-color: #93aed7;
+      font-weight: 500;
+    }
+    .btn-outline-light {
+      --bs-btn-color: #e2e8f0;
+      --bs-btn-border-color: #657185;
+      --bs-btn-hover-color: #fff;
+      --bs-btn-hover-bg: #35465e;
+      --bs-btn-hover-border-color: #71819a;
+    }
+    .btn-secondary {
+      --bs-btn-color: #d9dde2;
+      --bs-btn-bg: #303438;
+      --bs-btn-border-color: #303438;
+      --bs-btn-hover-color: white;
+      --bs-btn-hover-bg: #3a3f44;
+      --bs-btn-hover-border-color: #3a3f44;
+    }
+    .stat-card { min-height: 91px; }
+    .stat-label { display: flex; min-height: 28px; align-items: center; color: var(--app-muted); font-size: 12px; font-weight: 500; }
+    .stat-value { display: block; margin-top: 7px; color: #e5e7e9; font-size: 21px; font-weight: 600; letter-spacing: -.3px; white-space: nowrap; }
+    .stat-note { margin-top: 3px; color: #92979d; font-size: 11px; }
+    .stat-label-with-info { display: flex; align-items: center; gap: 6px; }
+    .stat-info { display: inline-flex; width: 28px; height: 28px; flex: 0 0 28px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 50%; color: #9b9fa4; background: transparent; }
+    .stat-info:hover { color: #c1d1f4; background: #293039; }
+    .stat-info:focus-visible { outline: 2px solid var(--app-blue); outline-offset: 2px; }
+    .stat-info svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+    .reference-button {
+      display: flex;
+      width: 100%;
+      min-height: 50px;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 14px;
+      color: #5b91ff;
+      background: #202d4d;
+      font-size: 15px;
+      font-weight: 600;
+      text-align: center;
+      transition: background-color .15s ease, color .15s ease;
+    }
+    .reference-button:hover { color: #82aaff; background: #29395f; }
+    .decision-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .decision-action {
+      display: inline-flex;
+      min-height: 36px;
+      align-items: center;
+      justify-content: center;
+      padding: 7px 12px;
+      border: 0;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.25;
+      text-align: center;
+      transition: background-color .15s ease, color .15s ease;
+    }
+    .decision-action-primary { color: #5b91ff; background: #202d4d; }
+    .decision-action-primary:hover { color: #82aaff; background: #29395f; }
+    .decision-action-secondary { color: #e7e9eb; background: #383a3d; }
+    .decision-action-secondary:hover { color: #fff; background: #45484b; }
+    .text-secondary { color: var(--app-muted) !important; }
+    .text-success { color: var(--app-green) !important; }
+    .section-title { margin: 0; font-size: 14px; font-weight: 500; }
+    .section-link { padding: 0; border: 0; color: #a6bde5; background: none; font-size: 11px; }
+    .list-group { --bs-list-group-bg: transparent; --bs-list-group-color: var(--app-text); --bs-list-group-border-color: var(--app-border); --bs-list-group-border-width: 1px; }
+    .list-group-item { padding: 12px 0; }
+    .list-group-item:first-child { padding-top: 2px; }
+    .list-group-item:last-child { padding-bottom: 2px; }
+    .transaction-name { color: #e0e3e6; font-size: 16px; font-weight: 500; }
+    .transaction-meta { margin-top: 4px; color: #858b92; font-size: 13px; }
+    .transaction-amount { color: #e0e3e6; font-size: 16px; font-weight: 600; white-space: nowrap; }
+    .transaction-amount.positive { color: #5b91ff; }
+    .money-history-group + .money-history-group { margin-top: 10px; }
+    .money-history-date { padding: 6px 0 2px; color: #b7bbc1; font-size: 12px; font-weight: 500; }
+    .money-history-row { display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0; }
+    .money-history-copy { min-width: 0; }
+    .money-history-copy .transaction-name { font-size: 16px; font-weight: 600; }
+    .money-history-copy .transaction-meta { margin-top: 3px; font-size: 13px; }
+    .badge-muted { border: 1px solid #42474c; border-radius: 4px; color: #acb1b6; background: #25292d; font-size: 10px; font-weight: 400; }
+    .modal-content { border: 1px solid #353a40; border-radius: 9px; color: var(--app-text); background: #1b1f23; }
+    .modal-header, .modal-footer { border-color: var(--app-border); }
+    .modal-title { font-size: 17px; font-weight: 500; }
+    .btn-close { filter: invert(1) grayscale(100%); opacity: .7; }
+    .form-label { color: #b7bdc4; font-size: 12px; }
+    .form-control, .form-select {
+      border-color: #3a4148;
+      color: #e3e6e9;
+      background-color: #14171a;
+    }
+    .form-control:focus, .form-select:focus { border-color: #8299ba; color: #fff; background-color: #14171a; box-shadow: 0 0 0 .2rem rgba(130,170,255,.12); }
+    .form-check-input { border-color: #59616b; background-color: #20252a; }
+    .form-check-input:checked { border-color: #98b3dc; background-color: #718daf; }
+    .form-text { color: #8a9097; font-size: 11px; }
+    .filter-chip { padding: 8px 12px; border: 0; border-radius: 12px; color: #f0f1f2; background: #383a3d; font-size: 14px; font-weight: 600; line-height: 20px; }
+    .filter-chip:hover { color: #fff; background: #45484b; }
+    .filter-chip.active, .filter-chip.active:hover { color: #292b2e; background: #fff; }
+    .recurring-row { border-bottom: 1px solid var(--app-border); }
+    .recurring-row:last-child { border-bottom: 0; }
+    .form-switch .form-check-input { width: 2em; }
+    .onboarding-card { max-width: 690px; }
+    .toast { position: fixed; right: 20px; bottom: 20px; z-index: 20; max-width: min(380px, calc(100vw - 32px)); padding: 12px 15px; border: 1px solid #405249; border-radius: 7px; color: #dce8df; background: #1c2821; font-size: 12px; opacity: 0; transform: translateY(8px); transition: .18s; pointer-events: none; }
+    .toast.visible { opacity: 1; transform: translateY(0); }
+    @media (max-width: 575.98px) {
+      .menu-panel { padding: 8px; border-radius: 14px; }
+      .menu-option { min-height: 58px; gap: 8px; padding: 7px 6px; }
+      .menu-option-icon { width: 36px; height: 36px; flex-basis: 36px; border-radius: 8px; }
+      .menu-option-icon svg { width: 18px; height: 18px; }
+      .menu-option-label { font-size: 11px; }
+      .savings-amount { margin-top: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="main-area">
+    <header class="topbar d-flex align-items-center justify-content-between px-3 px-lg-5">
+      <a class="brand text-decoration-none" href="#" data-view="home">Запас</a>
+      <div class="crumb">Личный кабинет <span class="mx-1">/</span><strong id="crumb">Главная</strong></div>
+    </header>
+
+    <div id="menu-top-slot" class="container-fluid px-3 px-lg-5 pt-4 d-none"></div>
+
+    <main class="content-area container-fluid py-4 px-3 px-lg-5">
+        <div class="content-wrap mx-auto">
+          <div id="back-to-home" class="mb-3 d-none">
+            <button class="back-button" type="button" aria-label="Назад на главную">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+              <span>Назад</span>
+            </button>
+          </div>
+          <section class="view active" id="view-home">
+            <div class="home-column">
+              <div class="row g-3">
+                  <div class="col-12">
+                    <article class="card savings-card savings-overview">
+                      <div class="card-body p-4 p-lg-4">
+                        <div class="savings-overview-top d-flex align-items-start justify-content-between">
+                          <div class="savings-overview-heading-copy">
+                              <div class="savings-label">Моя копилка</div>
+                              <div class="savings-name" id="goal-name">Финансовая подушка</div>
+                          </div>
+                          <div class="d-flex align-items-start gap-2">
+                            <span class="savings-state" id="savings-state">Активна</span>
+                          </div>
+                        </div>
+                        <div class="savings-overview-center">
+                          <div class="savings-amount"><span id="savings-balance">12 180</span> <small>₽</small></div>
+                          <div class="savings-caption">Накоплено</div>
+                          <div class="d-flex justify-content-between gap-2 goal-row"><span>Прогресс к цели</span><span><b id="progress-value">34</b>% · <span id="goal-amount">36 000</span> ₽</span></div>
+                          <div class="progress" role="progressbar" aria-label="Прогресс накоплений" aria-valuenow="34" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" id="progress-bar" style="width:34%"></div></div>
+                          <div class="savings-actions d-flex justify-content-center gap-3">
+                            <button class="savings-action" type="button" data-bs-toggle="modal" data-bs-target="#rule-modal">
+                              <span class="savings-action-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span>
+                              <span>Правило</span>
+                            </button>
+                            <button class="savings-action" type="button" data-bs-toggle="modal" data-bs-target="#withdraw-modal">
+                              <span class="savings-action-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v13M7 12l5 5 5-5"></path><path d="M5 20h14"></path></svg></span>
+                              <span>Снять</span>
+                            </button>
+                      </div>
+                    </article>
+                  </div>
+                  <div class="col-12" id="home-menu-slot">
+                    <nav class="menu-wrap" aria-label="Разделы кабинета">
+                      <div class="card menu-panel">
+                        <div class="row g-1">
+                          <div class="col-6"><button class="menu-option active w-100" data-view="home" type="button"><span class="menu-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3.5 10 8.5-7 8.5 7"></path><path d="M5.5 9v11h13V9M9.5 20v-6h5v6"></path></svg></span><span class="menu-option-label">Главная</span></button></div>
+                          <div class="col-6"><button class="menu-option w-100" data-view="savings" type="button"><span class="menu-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8.5h16v11H4z"></path><path d="M4 8.5 6 5h12l2 3.5M8 12h8"></path><path d="M12 12v4"></path></svg></span><span class="menu-option-label">Копилка и правило</span></button></div>
+                          <div class="col-6"><button class="menu-option w-100" data-view="transactions" type="button"><span class="menu-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h14"></path><path d="m8 4-3 2 3 2M16 10l3 2-3 2"></path></svg></span><span class="menu-option-label">Операции</span></button></div>
+                          <div class="col-6"><button class="menu-option w-100" data-view="recurring" type="button"><span class="menu-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16M8 14h3M8 17h6"></path></svg></span><span class="menu-option-label">Регулярные платежи</span></button></div>
+                          <div class="col-6"><button class="menu-option w-100" data-view="decisions" type="button"><span class="menu-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 20 7v5c0 4.5-3 7.5-8 9-5-1.5-8-4.5-8-9V7z"></path><path d="m8.5 12 2.2 2.2 4.8-4.8"></path></svg></span><span class="menu-option-label">Решения</span></button></div>
+                          <div class="col-6"><button class="menu-option w-100" data-view="onboarding" type="button"><span class="menu-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"></path><path d="M15 3v5h5M10 13h6M10 17h6"></path></svg></span><span class="menu-option-label">Редактирование</span></button></div>
+                        </div>
+                      </div>
+                    </nav>
+                  </div>
+
+                  <div class="col-6">
+                    <article class="card stat-card h-100"><div class="card-body p-3"><div class="stat-label">Баланс карты</div><strong class="stat-value">26 000 ₽</strong><div class="stat-note">собственные средства</div></div></article>
+                  </div>
+                  <div class="col-6">
+                    <article class="card stat-card h-100"><div class="card-body p-3"><div class="stat-label stat-label-with-info"><span>Безопасно отложить</span><button class="stat-info" type="button" aria-label="Как рассчитана безопасная сумма" title="Как рассчитана сумма" data-bs-toggle="modal" data-bs-target="#explanation-modal"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7h.01"></path></svg></button></div><strong class="stat-value text-success">1 000 ₽</strong><div class="stat-note">с учётом будущих трат</div></div></article>
+                  </div>
+                  <div class="col-12">
+                    <article class="card">
+                      <div class="card-body p-3 p-lg-4">
+                        <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+                          <h2 class="section-title">Последние операции</h2>
+                        </div>
+                        <div class="money-history">
+                          <section class="money-history-group">
+                            <div class="money-history-date">Вчера, 28 октября</div>
+                            <div class="money-history-row"><div class="money-history-copy"><div class="transaction-name">Подработка</div><div class="transaction-meta">Доходы</div></div><span class="transaction-amount positive">+24 000 ₽</span></div>
+                          </section>
+                          <section class="money-history-group">
+                            <div class="money-history-date">20 октября</div>
+                            <div class="money-history-row"><div class="money-history-copy"><div class="transaction-name">Рассрочка за ноутбук</div><div class="transaction-meta">Обязательные платежи</div></div><span class="transaction-amount">−6 000 ₽</span></div>
+                          </section>
+                          <section class="money-history-group">
+                            <div class="money-history-date">18 октября</div>
+                            <div class="money-history-row"><div class="money-history-copy"><div class="transaction-name">Стипендия</div><div class="transaction-meta">Доходы</div></div><span class="transaction-amount positive">+5 000 ₽</span></div>
+                          </section>
+                        </div>
+                        <button class="reference-button mt-3" type="button" data-go="transactions">Перейти в историю</button>
+                      </div>
+                    </article>
+                  </div>
+
+                </div>
+              </div>
+
+            </div>
+          </section>
+
+          <section class="view d-none" id="view-savings">
+            <div class="mb-4"><h1 class="page-title">Копилка и правило</h1><p class="page-description">Цель и параметры накопления</p><button class="reference-button mt-3" type="button" data-bs-toggle="modal" data-bs-target="#rule-modal">Изменить правило</button></div>
+            <div class="row g-3">
+              <div class="col-12">
+                <article class="card savings-card"><div class="card-body p-4"><div class="savings-label">Моя копилка</div><div class="savings-name" data-copy-goal>Финансовая подушка</div><div class="savings-amount"><span data-copy-balance>12 180</span> <small>₽</small></div><div class="savings-caption">Накоплено</div><div class="d-flex justify-content-between mt-4 mb-2 goal-row"><span>Прогресс к цели</span><span><b data-copy-progress>34</b>% · <span data-copy-target>36 000</span> ₽</span></div><div class="progress"><div class="progress-bar" data-copy-progress-bar style="width:34%"></div></div><div class="mt-3"><div class="savings-rule">Правило: <b data-copy-percent>10</b>% от дохода</div><button class="reference-button mt-3" type="button" data-bs-toggle="modal" data-bs-target="#withdraw-modal">Снять на карту</button></div></div></article>
+              </div>
+              <div class="col-12">
+                <article class="card h-100"><div class="card-body p-4"><h2 class="section-title mb-3">Безопасное накопление</h2><div class="list-group list-group-flush"><div class="list-group-item d-flex justify-content-between gap-3"><span>Минимальный доход</span><strong>3 000 ₽</strong></div><div class="list-group-item d-flex justify-content-between gap-3"><span>Тихие часы</span><strong>23:00–09:00</strong></div><div class="list-group-item d-flex justify-content-between gap-3"><span>Минимальный перевод</span><strong>100 ₽</strong></div></div><button class="reference-button mt-4" id="pause-button" type="button">Поставить на паузу</button></div></article>
+              </div>
+            </div>
+          </section>
+
+          <section class="view d-none" id="view-transactions">
+            <div class="mb-4"><h1 class="page-title">Операции</h1><p class="page-description">Доходы и расходы, новые сверху</p></div>
+            <div class="d-flex gap-2 mb-3 filter-row" role="group" aria-label="Фильтр операций"><button class="btn filter-chip active" type="button" data-filter="expense" aria-pressed="true">Расходы</button><button class="btn filter-chip" type="button" data-filter="income" aria-pressed="false">Зачисления</button></div>
+            <article class="card"><div class="card-body p-3 p-lg-4"><div class="money-history" id="transaction-table">
+              <section class="money-history-group" data-day-group hidden>
+                <div class="money-history-date">Вчера, 28 октября</div>
+                <div class="money-history-row" data-kind="income" hidden><div class="money-history-copy"><div class="transaction-name">Подработка</div><div class="transaction-meta">Доходы</div></div><span class="transaction-amount positive">+24 000 ₽</span></div>
+              </section>
+              <section class="money-history-group" data-day-group>
+                <div class="money-history-date">20 октября</div>
+                <div class="money-history-row" data-kind="expense"><div class="money-history-copy"><div class="transaction-name">Рассрочка за ноутбук</div><div class="transaction-meta">Обязательные платежи</div></div><span class="transaction-amount">−6 000 ₽</span></div>
+              </section>
+              <section class="money-history-group" data-day-group hidden>
+                <div class="money-history-date">18 октября</div>
+                <div class="money-history-row" data-kind="income" hidden><div class="money-history-copy"><div class="transaction-name">Стипендия</div><div class="transaction-meta">Доходы</div></div><span class="transaction-amount positive">+5 000 ₽</span></div>
+              </section>
+              <section class="money-history-group" data-day-group>
+                <div class="money-history-date">16 октября</div>
+                <div class="money-history-row" data-kind="expense"><div class="money-history-copy"><div class="transaction-name">Онлайн-кинотеатр</div><div class="transaction-meta">Развлечения</div></div><span class="transaction-amount">−399 ₽</span></div>
+              </section>
+            </div></div></article>
+          </section>
+
+          <section class="view d-none" id="view-recurring">
+            <div class="mb-4"><h1 class="page-title">Регулярные платежи</h1><p class="page-description">Отметьте платежи, которые нужно учитывать как обязательные</p></div>
+            <article class="card"><div class="card-body p-3 p-lg-4">
+              <div class="recurring-row row align-items-center g-3 py-3"><div class="col"><div class="transaction-name">Рассрочка за ноутбук</div><div class="transaction-meta">6 000 ₽ · 25-го числа · последнее списание 25 сентября</div></div><div class="col-auto text-secondary small recurring-label">Обязательный</div><div class="col-auto"><div class="form-check form-switch mb-0"><input class="form-check-input recurring-toggle" type="checkbox" checked aria-label="Учитывать рассрочку как обязательный платёж"></div></div></div>
+              <div class="recurring-row row align-items-center g-3 py-3"><div class="col"><div class="transaction-name">Аренда комнаты</div><div class="transaction-meta">12 000 ₽ · 1-го числа · последнее списание 1 октября</div></div><div class="col-auto text-secondary small recurring-label">Обязательный</div><div class="col-auto"><div class="form-check form-switch mb-0"><input class="form-check-input recurring-toggle" type="checkbox" checked aria-label="Учитывать аренду как обязательный платёж"></div></div></div>
+              <div class="recurring-row row align-items-center g-3 py-3"><div class="col"><div class="transaction-name">Онлайн-кинотеатр</div><div class="transaction-meta">399 ₽ · 16-го числа · последнее списание 16 октября</div></div><div class="col-auto text-secondary small recurring-label">Необязательный</div><div class="col-auto"><div class="form-check form-switch mb-0"><input class="form-check-input recurring-toggle" type="checkbox" aria-label="Учитывать кинотеатр как обязательный платёж"></div></div></div>
+            </div></article>
+            <p class="form-text mt-3">Необязательные платежи не резервируют деньги при расчёте безопасной суммы.</p>
+          </section>
+
+          <section class="view d-none" id="view-decisions">
+            <div class="mb-4"><h1 class="page-title">Решения</h1><p class="page-description">История действий системы и причины</p></div>
+            <div class="d-flex flex-wrap gap-2 mb-3 filter-row" role="group" aria-label="Фильтр решений"><button class="btn filter-chip active" type="button" data-filter="all" aria-pressed="true">Все</button><button class="btn filter-chip" type="button" data-filter="pending" aria-pressed="false">Открытые вопросы</button><button class="btn filter-chip" type="button" data-filter="done" aria-pressed="false">Завершённые</button></div>
+            <article class="card"><div class="card-body p-3 p-lg-4">
+              <div class="decision-row py-3" data-decision-status="pending"><div class="d-flex flex-wrap justify-content-between align-items-center gap-2"><strong>Предложение отложить 1 000 ₽</strong><span class="decision-status">Ожидает ответа</span></div><p class="text-secondary small mt-2 mb-3">Доход ниже обычного на 20%. До следующего поступления ожидается обязательный платёж; предложена безопасная сумма.</p><div class="decision-actions"><button class="decision-action decision-action-primary" type="button" data-answer="Отложить 1 000 ₽" data-choice="amount" data-amount="100000">Отложить 1 000 ₽</button><button class="decision-action decision-action-secondary" type="button" data-answer="Пропустить пополнение" data-choice="skip">Пропустить</button></div></div>
+              <div class="decision-row py-3" data-decision-status="pending"><div class="d-flex flex-wrap justify-content-between align-items-center gap-2"><strong>Это ваш доход?</strong><span class="decision-status">Ожидает ответа</span></div><p class="text-secondary small mt-2 mb-3">Поступление от нового отправителя. Подтвердите, чтобы система могла учесть его при расчёте накопления.</p><div class="decision-actions"><button class="decision-action decision-action-primary" type="button" data-answer="Да, это мой доход" data-choice="yes">Да, это мой доход</button><button class="decision-action decision-action-secondary" type="button" data-answer="Нет, это не мой доход" data-choice="no">Нет, это не мой доход</button></div></div>
+              <div class="decision-row py-3" data-decision-status="done"><div class="d-flex justify-content-between gap-3"><strong>Отложено 3 000 ₽</strong><span class="decision-status done">Выполнено</span></div><p class="text-secondary small mt-2 mb-0">Доход в пределах обычного, безопасной суммы достаточно для пополнения копилки.</p></div>
+              <div class="decision-row py-3" data-decision-status="done"><div class="d-flex justify-content-between gap-3"><strong>Пополнение пропущено</strong><span class="decision-status done">Завершено</span></div><p class="text-secondary small mt-2 mb-0">Поступление классифицировано как перевод между собственными счетами — это не доход.</p></div>
+            </div></article>
+          </section>
+
+          <section class="view d-none" id="view-onboarding">
+            <div class="mb-4"><h1 class="page-title">Подключение копилки</h1><p class="page-description">Информация о доходах и обязательных платежах</p></div>
+            <article class="card onboarding-card"><div class="card-body p-3 p-lg-4">
+              <div class="row g-3">
+                <div class="col-12 col-md-6"><label class="form-label" for="birth-date">Дата рождения</label><input id="birth-date" class="form-control" type="date" value="2006-03-15"></div>
+                <div class="col-12 col-md-6"><label class="form-label" for="monthly-income">Доход в месяц, ₽</label><input id="monthly-income" class="form-control" type="number" value="30000" min="0"></div>
+                <div class="col-12 col-md-6"><label class="form-label" for="income-type">Источник дохода</label><select id="income-type" class="form-select"><option value="mixed">Разные источники</option><option value="salary">Зарплата</option><option value="scholarship">Стипендия</option><option value="freelance">Фриланс</option><option value="none">Дохода пока нет</option></select></div>
+                <div class="col-12 col-md-6"><label class="form-label" for="income-stability">Регулярность дохода</label><select id="income-stability" class="form-select"><option value="irregular">Нерегулярный</option><option value="stable">Стабильный</option></select></div>
+                <div class="col-12 col-md-6"><label class="form-label" for="income-months">Сколько месяцев есть доход</label><input id="income-months" class="form-control" type="number" value="8" min="0"></div>
+                <div class="col-12 col-md-6"><label class="form-label" for="monthly-payments">Обязательные платежи в месяц, ₽</label><input id="monthly-payments" class="form-control" type="number" value="7000" min="0"></div>
+                <div class="col-12"><div class="form-check"><input class="form-check-input" id="has-loans" type="checkbox"><label class="form-check-label small" for="has-loans">Есть кредиты, рассрочки или займы</label></div><div class="form-text">Их платежи укажите в поле обязательных платежей выше.</div></div>
+                <div class="col-12"><div class="form-check"><input class="form-check-input" id="data-consent" type="checkbox"><label class="form-check-label small" for="data-consent">Согласие на обработку персональных данных</label></div></div>
+                <div class="col-12"><div class="form-check"><input class="form-check-input" id="analysis-consent" type="checkbox"><label class="form-check-label small" for="analysis-consent">Согласие на анализ доходов и расходов</label></div></div>
+              </div>
+              <button class="reference-button mt-3" type="button" data-toast="Подключение пока недоступно.">Проверить и подключить</button>
+            </div></article>
+          </section>
+        </div>
+    </main>
+  </div>
+
+  <div class="modal fade" id="explanation-modal" tabindex="-1" aria-labelledby="explanation-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+      <div class="modal-header"><h2 class="modal-title" id="explanation-modal-title">Как рассчитана безопасная сумма</h2><button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Закрыть"></button></div>
+      <div class="modal-body">
+        <p class="text-secondary small">Система оставляет деньги на предстоящие расходы и резерв, а откладывает только безопасный остаток.</p>
+        <div class="list-group list-group-flush">
+          <div class="list-group-item d-flex justify-content-between gap-3"><span>Собственные средства на карте</span><strong>26 000 ₽</strong></div>
+          <div class="list-group-item d-flex justify-content-between gap-3"><span>Предстоящие расходы и резерв</span><strong>− 25 000 ₽</strong></div>
+          <div class="list-group-item d-flex justify-content-between gap-3"><strong>Безопасно отложить</strong><strong class="text-success">1 000 ₽</strong></div>
+        </div>
+        <p class="form-text mt-3 mb-0">В подключённом интерфейсе детализация, предстоящие платежи и дата расчёта будут показаны из объяснения решения API.</p>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="modal fade" id="rule-modal" tabindex="-1" aria-labelledby="rule-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+      <div class="modal-header"><h2 class="modal-title" id="rule-modal-title">Цель и правило</h2><button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Закрыть"></button></div>
+      <div class="modal-body"><div class="row g-3">
+        <div class="col-12"><label class="form-label" for="goal-input">Название цели</label><input class="form-control" id="goal-input" value="Финансовая подушка" maxlength="80"></div>
+        <div class="col-12 col-sm-6"><label class="form-label" for="goal-amount-input">Сумма цели, ₽</label><input class="form-control" id="goal-amount-input" type="number" min="1" value="36000"></div>
+        <div class="col-12 col-sm-6"><label class="form-label" for="goal-percent-input">Откладывать, %</label><input class="form-control" id="goal-percent-input" type="number" min="1" max="50" value="10"></div>
+        <div class="col-12"><label class="form-label" for="goal-term-input">Срок</label><select class="form-select" id="goal-term-input"><option value="6">6 месяцев</option><option value="12" selected>12 месяцев</option><option value="24">24 месяца</option></select></div>
+        <div class="col-12"><div class="form-check"><input class="form-check-input" id="paused-input" type="checkbox"><label class="form-check-label small" for="paused-input">Поставить копилку на паузу</label></div></div>
+        <div class="col-6"><label class="form-label" for="quiet-from">Тихие часы с</label><input class="form-control" id="quiet-from" type="time" value="23:00"></div>
+        <div class="col-6"><label class="form-label" for="quiet-to">Тихие часы до</label><input class="form-control" id="quiet-to" type="time" value="09:00"></div>
+      </div></div>
+      <div class="modal-footer"><button class="reference-button" id="save-rule" type="button">Сохранить</button></div>
+    </div></div>
+  </div>
+
+  <div class="modal fade" id="withdraw-modal" tabindex="-1" aria-labelledby="withdraw-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content">
+      <div class="modal-header"><h2 class="modal-title" id="withdraw-modal-title">Снять из копилки</h2><button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Закрыть"></button></div>
+      <div class="modal-body"><label class="form-label" for="withdraw-amount">Сумма, ₽</label><input class="form-control" id="withdraw-amount" type="number" min="1" value="1000"><div class="form-text mt-2">Доступно: <span id="withdraw-available">12 180 ₽</span>. Запрос к API не отправляется.</div></div>
+      <div class="modal-footer"><button class="btn btn-secondary btn-sm" type="button" data-bs-dismiss="modal">Отмена</button><button class="btn btn-primary btn-sm" id="confirm-withdraw" type="button">Подтвердить</button></div>
+    </div></div>
+  </div>
+  <div class="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+  <script>
+    const state = { balance: 12180, goal: 36000, name: "Финансовая подушка", percent: 10, paused: false };
+    const toast = document.querySelector(".toast");
+    const numberFormatter = new Intl.NumberFormat("ru-RU");
+    let toastTimer;
+
+    function formatMoney(amount) {
+      return `${numberFormatter.format(amount)} ₽`;
+    }
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add("visible");
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => toast.classList.remove("visible"), 2600);
+    }
+
+    function renderSavings() {
+      const progress = state.goal ? Math.min(100, Math.round(state.balance / state.goal * 100)) : 0;
+      document.querySelectorAll("#savings-balance, [data-copy-balance]").forEach((el) => { el.textContent = numberFormatter.format(state.balance); });
+      document.querySelectorAll("#goal-name, [data-copy-goal]").forEach((el) => { el.textContent = state.name; });
+      document.querySelectorAll("#goal-amount, [data-copy-target]").forEach((el) => { el.textContent = numberFormatter.format(state.goal); });
+      document.querySelectorAll("#progress-value, [data-copy-progress]").forEach((el) => { el.textContent = progress; });
+      document.querySelectorAll("#progress-bar, [data-copy-progress-bar]").forEach((el) => { el.style.width = `${progress}%`; });
+      document.querySelectorAll("#save-percent, [data-copy-percent]").forEach((el) => { el.textContent = state.percent; });
+      document.querySelectorAll("#savings-state, [data-copy-state]").forEach((el) => {
+        el.textContent = state.paused ? "На паузе" : "Активна";
+        el.classList.toggle("paused", state.paused);
+      });
+      document.querySelector("#withdraw-available").textContent = formatMoney(state.balance);
+      const pauseButton = document.querySelector("#pause-button");
+      if (pauseButton) pauseButton.textContent = state.paused ? "Возобновить копилку" : "Поставить на паузу";
+    }
+
+    function setView(name) {
+      const isHome = name === "home";
+      document.querySelector("#back-to-home").classList.toggle("d-none", isHome);
+      document.querySelector("#home-menu-slot").classList.toggle("d-none", !isHome);
+      document.querySelectorAll(".view").forEach((view) => {
+        const active = view.id === `view-${name}`;
+        view.classList.toggle("active", active);
+        view.classList.toggle("d-none", !active);
+      });
+      document.querySelectorAll("[data-view]").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
+      const link = document.querySelector(`.menu-wrap [data-view="${name}"]`);
+      document.querySelector("#crumb").textContent = link ? link.textContent.trim() : "Главная";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    document.querySelector("#back-to-home button").addEventListener("click", () => setView("home"));
+    document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+    document.querySelectorAll("[data-go]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.go)));
+    document.querySelectorAll("[data-toast]").forEach((button) => button.addEventListener("click", () => showToast(button.dataset.toast)));
+
+    document.querySelectorAll(".filter-row").forEach((row) => row.querySelectorAll(".filter-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        row.querySelectorAll(".filter-chip").forEach((item) => {
+          item.classList.remove("active");
+          item.setAttribute("aria-pressed", "false");
+        });
+        chip.classList.add("active");
+        chip.setAttribute("aria-pressed", "true");
+        if (row.closest("#view-transactions")) {
+          document.querySelectorAll("#transaction-table [data-kind]").forEach((item) => {
+            item.hidden = item.dataset.kind !== chip.dataset.filter;
+          });
+          document.querySelectorAll("#transaction-table [data-day-group]").forEach((group) => {
+            group.hidden = !group.querySelector("[data-kind]:not([hidden])");
+          });
+        }
+        if (row.closest("#view-decisions")) {
+          document.querySelectorAll(".decision-row").forEach((item) => {
+            item.hidden = chip.dataset.filter !== "all" && item.dataset.decisionStatus !== chip.dataset.filter;
+          });
+        }
+      });
+    }));
+
+    document.querySelectorAll(".recurring-toggle").forEach((toggle) => toggle.addEventListener("change", () => {
+      const label = toggle.closest(".recurring-row").querySelector(".recurring-label");
+      label.textContent = toggle.checked ? "Обязательный" : "Необязательный";
+      showToast("Параметры обновлены.");
+    }));
+
+    document.querySelectorAll("[data-answer]").forEach((button) => button.addEventListener("click", () => {
+      const row = button.closest(".decision-row");
+      if (row) {
+        row.dataset.decisionStatus = "done";
+        const status = row.querySelector(".decision-status");
+        status.textContent = "Ответ учтён";
+        status.classList.add("done");
+        row.querySelector(".decision-actions").remove();
+      }
+      showToast("Ответ учтён.");
+    }));
+
+    document.querySelector("#save-rule").addEventListener("click", () => {
+      const goal = Number(document.querySelector("#goal-amount-input").value);
+      const percent = Number(document.querySelector("#goal-percent-input").value);
+      const name = document.querySelector("#goal-input").value.trim();
+      if (!name || !Number.isFinite(goal) || goal <= 0 || !Number.isInteger(percent) || percent < 1 || percent > 50) {
+        showToast("Проверьте название цели, сумму и процент от 1 до 50.");
+        return;
+      }
+      state.name = name;
+      state.goal = goal;
+      state.percent = percent;
+      state.paused = document.querySelector("#paused-input").checked;
+      renderSavings();
+      bootstrap.Modal.getOrCreateInstance(document.querySelector("#rule-modal")).hide();
+      showToast("Правило обновлено.");
+    });
+
+    document.querySelector("#confirm-withdraw").addEventListener("click", () => {
+      const input = document.querySelector("#withdraw-amount");
+      const amount = Number(input.value);
+      if (!Number.isInteger(amount) || amount <= 0 || amount > state.balance) {
+        input.setCustomValidity("Введите сумму от 1 ₽ до баланса копилки.");
+        input.reportValidity();
+        input.setCustomValidity("");
+        return;
+      }
+      state.balance -= amount;
+      renderSavings();
+      bootstrap.Modal.getOrCreateInstance(document.querySelector("#withdraw-modal")).hide();
+      showToast("Баланс обновлён.");
+    });
+
+    const pauseButton = document.querySelector("#pause-button");
+    if (pauseButton) pauseButton.addEventListener("click", () => {
+      state.paused = !state.paused;
+      renderSavings();
+      showToast("Статус изменён.");
+    });
+
+    renderSavings();
+  </script>
+</body>
+</html>
