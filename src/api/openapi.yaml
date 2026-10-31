@@ -90,9 +90,32 @@ paths:
                   value: { client_id: teen, eligible: false, score: 0, mode: smart, reasons: ["Копилка доступна с 18 лет"] }
         "400": { $ref: "#/components/responses/ValidationError" }
 
+
   /api/clients/{id}/rule:
     parameters:
       - $ref: "#/components/parameters/ClientID"
+    get:
+      summary: Получить текущее правило накопления
+      tags: [rules]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Текущее правило накопления
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavingsRule'
+        '404':
+          description: Клиент или правило не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     put:
       tags: [rule]
       summary: Создать или заменить правило копилки
@@ -257,6 +280,41 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/clients/{id}/operations:
+    get:
+      summary: История движений копилки (переводы и снятия)
+      tags: [savings]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Список операций, новые первыми
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Operation'
+        "400": { $ref: "#/components/responses/ValidationError" }
+        '404':
+          description: Клиент не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/clients/{id}/recurring:
     parameters:
@@ -563,6 +621,26 @@ components:
           allOf:
             - $ref: "#/components/schemas/Money"
 
+    Operation:
+      type: object
+      required: [id, type, amount, created_at]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [transfer_in, withdrawal]
+        amount:
+          type: integer
+          description: Сумма в копейках
+        created_at:
+          type: string
+          format: date-time
+        decision_id:
+          type: string
+          nullable: true
+          description: ID решения, породившего перевод; null для снятий
+
     OnboardingResult:
       type: object
       required: [client_id, eligible, score, mode, reasons]
@@ -689,7 +767,7 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: Только для `pending`; через 24 часа после `notify_at` срабатывает безопасный вариант. Ответ на сумму переводит не больше, чем безопасно на момент ответа
+          description: Только для `pending`; через 24 часа после `notify_at` срабатывает безопасный вариант. Ответ на сумму переводит не больше, чем безопасно на момент ответа; средние повседневные траты сохраняются из предложения, баланс и обязательные платежи проверяются заново
         notify_at:
           type: string
           format: date-time
@@ -782,6 +860,11 @@ components:
           description: Собственные деньги на карте
           allOf:
             - $ref: "#/components/schemas/Money"
+        safe_amount:
+          type: integer
+          format: int64
+          nullable: true
+          description: Актуальная безопасная сумма в копейках с учётом текущего баланса; null в простом режиме. Исторический расчёт остаётся в explanation решения.
         progress_percent:
           type: number
           format: float

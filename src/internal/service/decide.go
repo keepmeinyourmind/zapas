@@ -106,6 +106,14 @@ func (s *Service) decideIncome(ctx context.Context, r *storage.Repo, client doma
 func (s *Service) upcoming(ctx context.Context, r *storage.Repo, clientID, currentTxID string,
 	rule domain.SavingsRule, now time.Time) (domain.Profile, profile.UpcomingResult, error) {
 
+	return s.upcomingWithSpending(ctx, r, clientID, currentTxID, rule, now, nil)
+}
+
+// upcomingWithSpending позволяет сохранить оценку повседневных трат открытого предложения.
+// Обязательные платежи и дата следующего дохода проверяются по актуальной истории.
+func (s *Service) upcomingWithSpending(ctx context.Context, r *storage.Repo, clientID, currentTxID string,
+	rule domain.SavingsRule, now time.Time, daily *domain.Money) (domain.Profile, profile.UpcomingResult, error) {
+
 	history, err := r.ListIncomeHistory(ctx, clientID, now.Add(-profileWindow))
 	if err != nil {
 		return domain.Profile{}, profile.UpcomingResult{}, err
@@ -118,13 +126,12 @@ func (s *Service) upcoming(ctx context.Context, r *storage.Repo, clientID, curre
 	if err != nil {
 		return domain.Profile{}, profile.UpcomingResult{}, err
 	}
-	// Резервируем деньги только под обязательные платежи. Платёж, который клиент пометил
-	// необязательным, — обычная трата: он входит в повседневные траты, а не в резерв по дате.
 	prof, recurring := profile.Build(history, profile.Options{
 		CurrentTxID: currentTxID, DeclaredIncome: rule.DeclaredIncome, Excluded: excluded,
 	}, now)
-	// Платежи из анкеты — только для холодного старта, пока по истории не найдено ни одного платежа.
-	// Если клиент исключил все найденные, анкета их не заменяет.
+	if daily != nil {
+		prof.DailySpending = *daily
+	}
 	if len(recurring) > 0 {
 		declaredPayments = 0
 	}
@@ -135,9 +142,23 @@ func (s *Service) upcoming(ctx context.Context, r *storage.Repo, clientID, curre
 // safeNow — сколько сейчас можно безопасно отложить: свои деньги на карте минус всё,
 // что понадобится до следующего дохода, минус неприкосновенный остаток. Так же считает движок.
 func (s *Service) safeNow(ctx context.Context, r *storage.Repo, client domain.Client, rule domain.SavingsRule,
-	currentTxID string, now time.Time) (domain.Money, error) {
+	d domain.Decision, now time.Time) (domain.Money, error) {
 
-	_, up, err := s.upcoming(ctx, r, client.ID, currentTxID, rule, now)
+	// Новая покупка уже уменьшила баланс. Для этого предложения она не должна
+	// одновременно повышать средние траты на каждый оставшийся день.
+	// Отсутствие строки повседневных трат в расшифровке означает нулевой прогноз.
+	var daily *domain.Money
+	if d.Explanation != nil {
+		value := domain.Money(0)
+		for _, item := range d.Explanation.Upcoming {
+			if item.Days > 0 {
+				value = item.PerDay
+				break
+			}
+		}
+		daily = &value
+	}
+	_, up, err := s.upcomingWithSpending(ctx, r, client.ID, d.SourceTxID, rule, now, daily)
 	if err != nil {
 		return 0, err
 	}

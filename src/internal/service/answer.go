@@ -107,7 +107,7 @@ func (s *Service) answerAmount(ctx context.Context, r *storage.Repo, d *domain.D
 			return domain.ValidationError(fmt.Sprintf("Сумма должна быть от %s до %s", rule.MinTransfer, limit))
 		}
 		// Пока клиент думал, он мог потратить деньги: переводим не больше, чем безопасно сейчас.
-		safe, err := s.safeNow(ctx, r, client, rule, d.SourceTxID, now)
+		safe, err := s.safeNow(ctx, r, client, rule, *d, now)
 		if err != nil {
 			return err
 		}

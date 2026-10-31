@@ -43,6 +43,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/clients/{id}/recurring/exclusion", s.setPaymentExcluded)
 	mux.HandleFunc("POST /api/debug/advance-time", s.advanceTime)
 	mux.HandleFunc("POST /api/scenarios/{name}/run", s.runScenario)
+	mux.HandleFunc("GET /api/clients/{id}/rule", s.getRule)
+	mux.HandleFunc("GET /api/clients/{id}/operations", s.listOperations)
 	return s.cors(mux)
 }
 

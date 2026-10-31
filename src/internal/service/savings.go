@@ -125,3 +125,18 @@ func withoutExcluded(recurring []domain.RecurringPayment, excluded map[string]bo
 	}
 	return out
 }
+
+// ListOperations возвращает хронологию всех движений копилки: переводы и снятия.
+func (s *Service) ListOperations(ctx context.Context, clientID string, limit int) ([]storage.Operation, error) {
+	if limit == 0 {
+		limit = 50
+	}
+	if limit < 1 || limit > 100 {
+		return nil, domain.ValidationError("limit должен быть от 1 до 100")
+	}
+	repo := s.store.Read()
+	if _, err := repo.GetClient(ctx, clientID); err != nil {
+		return nil, err
+	}
+	return repo.ListOperations(ctx, clientID, limit)
+}

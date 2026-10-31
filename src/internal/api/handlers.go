@@ -67,3 +67,13 @@ func (s *Server) listTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, list)
 }
+
+func (s *Server) getRule(w http.ResponseWriter, r *http.Request) {
+	clientID := r.PathValue("id")
+	rule, err := s.svc.GetRule(r.Context(), clientID)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rule)
+}

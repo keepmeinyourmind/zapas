@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/keepmeinyourmind/zapas/src/internal/domain"
 )
@@ -51,4 +52,25 @@ func (s *Server) setPaymentExcluded(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
+}
+
+// listOperations — GET /api/clients/{id}/operations?limit=50
+// Единая история движений копилки: переводы и снятия, новые первыми.
+func (s *Server) listOperations(w http.ResponseWriter, r *http.Request) {
+	clientID := r.PathValue("id")
+	limit := 50
+	if l := r.URL.Query().Get("limit"); l != "" {
+		n, err := strconv.Atoi(l)
+		if err != nil || n < 1 || n > 100 {
+			s.writeError(w, domain.ValidationError("limit должен быть от 1 до 100"))
+			return
+		}
+		limit = n
+	}
+	ops, err := s.svc.ListOperations(r.Context(), clientID, limit)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, ops)
 }
