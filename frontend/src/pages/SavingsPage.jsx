@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import DepositModal from '../features/savings/DepositModal';
 import { useOutletContext } from 'react-router-dom';
 import SavingsCard from '../features/savings/SavingsCard';
 import { useKnownRule, useSaveRule } from '../features/rule/hooks';
@@ -8,6 +10,7 @@ import { LoadingState, ErrorState, InlineError } from '../shared/ui/States';
 import ConnectionNotice from '../features/onboarding/ConnectionNotice';
 
 export default function SavingsPage() {
+  const [showDepositModal, setShowDepositModal] = useState(false);
   const { savings, onboarding, onRule, onWithdraw } = useOutletContext();
   const { data: rule } = useKnownRule();
   const pause = useSaveRule(true);
@@ -20,7 +23,7 @@ export default function SavingsPage() {
   return <section className="view" id="view-savings">
     <div className="mb-4"><h1 className="page-title">Информация</h1><p className="page-description">Цель и параметры накопления</p></div>
     {savings.isPending ? <LoadingState /> : savings.isError && !savings.data ? savings.error.status === 404 ? <ConnectionNotice onboarding={onboarding} onRule={onRule} /> : <ErrorState error={savings.error} retry={savings.refetch} /> : <div className="row g-3">
-      <div className="col-12"><SavingsCard savings={savings.data} rule={rule} onWithdraw={onWithdraw} /></div>
+      <div className="col-12"><SavingsCard savings={savings.data} rule={rule} onWithdraw={onWithdraw} onDeposit={() => setShowDepositModal(true)} /></div>
       <div className="col-12"><article className="card h-100"><div className="card-body p-4"><h2 className="section-title mb-3">Безопасное накопление</h2>
         <div className="list-group list-group-flush">
           <div className="list-group-item d-flex justify-content-between gap-3"><span>Минимальный доход</span><strong>{formatMoney(rule?.min_income)}</strong></div>
@@ -33,5 +36,5 @@ export default function SavingsPage() {
       </div></article></div>
     </div>}
     {savings.isError && savings.data && <ErrorState error={savings.error} retry={savings.refetch} />}
-  </section>;
+  <DepositModal show={showDepositModal} onHide={() => setShowDepositModal(false)} onSuccess={() => savings.refetch()} /></section>;
 }

@@ -3,8 +3,19 @@ import { dateKey, formatDate } from '../../shared/utils/date';
 import { EmptyState } from '../../shared/ui/States';
 
 const incomeNames = { salary: 'Зарплата', advance: 'Аванс', bonus: 'Премия', scholarship: 'Стипендия', freelance: 'Фриланс' };
-const typeNames = { incoming: 'Зачисление', outgoing: 'Расходы', refund: 'Возврат', internal: 'Перевод между счетами', loan: 'Кредитные средства' };
-export const isCredit = (transaction) => transaction.type !== 'outgoing';
+const typeNames = {
+  incoming: 'Зачисление',
+  outgoing: 'Расходы',
+  refund: 'Возврат',
+  internal: 'Пополнение копилки',
+  withdrawal: 'Снятие из копилки',
+  loan: 'Кредитные средства'
+};
+
+export const isCredit = (transaction) => {
+  // Положительные операции
+  return ['incoming', 'refund', 'loan', 'internal'].includes(transaction.type);
+};
 
 export default function TransactionList({ transactions = [] }) {
   if (!transactions.length) return <EmptyState>Операций пока нет.</EmptyState>;
