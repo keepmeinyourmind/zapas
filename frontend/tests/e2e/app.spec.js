@@ -224,3 +224,39 @@ for (const width of [320, 390, 768]) {
     }
   });
 }
+
+
+test('updates current safe amount after saving while preserving the historical explanation', async ({ page }) => {
+  await mockApi(page);
+  await page.goto('/');
+  const current = page.locator('.stat-value').nth(1);
+  await expect(current).toContainText('1 000');
+  await page.goto('/decisions');
+  await page.getByRole('button', { name: /Отложить.*1\s000/ }).click();
+  await page.goto('/');
+  await expect(current).toHaveText('0 ₽');
+  await page.reload();
+  await expect(current).toHaveText('0 ₽');
+  await page.getByRole('button', { name: 'Как рассчитана безопасная сумма', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('1 000');
+});
+
+
+test('shows savings deposits and withdrawals in history and recent operations', async ({ page }) => {
+  await mockApi(page, { operations: [
+    { id: 'withdraw-1', type: 'withdrawal', amount: 50000, created_at: '2026-10-28T12:00:00Z' },
+    { id: 'deposit-1', type: 'transfer_in', amount: 100000, created_at: '2026-10-28T11:00:00Z', decision_id: 'ask-1' },
+  ] });
+  await page.goto('/');
+  const recent = page.locator('.money-history-row');
+  await expect(recent).toHaveCount(2);
+  await expect(recent.first()).toContainText('Снятие из копилки');
+  await expect(recent.first()).toContainText('−500');
+  await expect(recent.nth(1)).toContainText('Пополнение копилки');
+  await expect(recent.nth(1)).toContainText('+1 000');
+  await page.getByRole('link', { name: 'Перейти в историю' }).click();
+  await expect(page.getByRole('button', { name: 'Копилка', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.money-history-row')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Зачисления', exact: true }).click();
+  await expect(page.locator('.money-history-row').first()).toContainText('Подработка');
+});

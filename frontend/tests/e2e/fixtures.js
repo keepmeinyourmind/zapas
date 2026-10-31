@@ -1,6 +1,6 @@
 export const savingsFixture = {
   client_id: 'anya', goal_name: 'Финансовая подушка', goal_amount: 3600000,
-  balance: 1218000, card_balance: 2600000, progress_percent: 34, paused: false,
+  balance: 1218000, card_balance: 2600000, safe_amount: 100000, progress_percent: 34, paused: false,
   mode: 'smart', arrested: false, pending_decision_id: 'ask-1',
 };
 export const ruleFixture = {
@@ -24,7 +24,7 @@ export const transactionsFixture = [
 export async function mockApi(page, options = {}) {
   const state = {
     savings: structuredClone(savingsFixture), rule: structuredClone(ruleFixture),
-    decisions: [structuredClone(decisionFixture)], transactions: structuredClone(transactionsFixture),
+    operations: [], decisions: [structuredClone(decisionFixture)], transactions: structuredClone(transactionsFixture),
     recurring: [{ counterparty: 'Рассрочка за ноутбук', amount: 600000, day_of_month: 25, last_at: '2026-09-25T10:00:00Z', excluded: false }],
     eligible: !options.missing, clientExists: !options.missing, calls: [],
     postedTransactions: new Map(), accountEvents: new Set(), ...options,
@@ -45,11 +45,13 @@ export async function mockApi(page, options = {}) {
     state.calls.push({ path, method, body, search: url.search });
     const json = (data, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
     if (state.override && await state.override({ route, path, method, body, state, json })) return;
+    if (path.endsWith('/operations')) return json(state.operations.slice(0, Number(url.searchParams.get('limit') || 50)));
     if (path.endsWith('/savings') && method === 'GET') return state.missing ? json({ error: 'Не найдено' }, 404) : json(state.savings);
     if (path.endsWith('/savings/withdraw')) {
       if (state.savings.arrested) return json({ error: 'Счёт арестован' }, 409);
       state.savings.balance -= body.amount;
       state.savings.card_balance += body.amount;
+      state.savings.safe_amount += body.amount;
       return json(state.savings, 201);
     }
     if (path === '/api/transactions' && method === 'POST') {
@@ -114,7 +116,7 @@ export async function mockApi(page, options = {}) {
       if (body.choice === 'yes') { d.action = 'ask'; d.reason = 'Доход подтверждён. Выберите сумму.'; }
       else {
         d.status = body.choice === 'amount' ? 'executed' : 'skipped';
-        if (body.choice === 'amount') { d.amount = body.amount; state.savings.balance += body.amount; }
+        if (body.choice === 'amount') { d.amount = body.amount; state.savings.balance += body.amount; state.savings.card_balance -= body.amount; state.savings.safe_amount = Math.max(0, state.savings.safe_amount - body.amount); }
         state.savings.pending_decision_id = null;
       }
       return json(d);
