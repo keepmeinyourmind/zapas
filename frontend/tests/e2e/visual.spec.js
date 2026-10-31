@@ -34,7 +34,7 @@ test('captures the mobile dashboard and rule modal', async ({ page }) => {
   await expect(page.locator('.savings-name')).toHaveText('Финансовая подушка');
   await page.evaluate(() => document.fonts.ready);
   await page.screenshot({ path: 'artifacts/dashboard-mobile.png', fullPage: true });
-  await page.getByRole('button', { name: 'Правило', exact: true }).click();
+  await page.getByRole('button', { name: 'Редактировать', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.locator('.modal.show')).toHaveCSS('opacity', '1');
   await page.screenshot({ path: 'artifacts/rule-mobile.png', fullPage: true, animations: 'disabled' });

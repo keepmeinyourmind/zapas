@@ -8,7 +8,7 @@ test('keeps the dashboard layout, aligns balances and opens calculation details'
   await page.goto('/');
   await expect(page.locator('.savings-name').first()).toHaveText('Финансовая подушка');
   await expect(page.locator('.savings-amount').first()).toContainText('12 180');
-  await expect(page.getByRole('navigation').getByRole('link')).toHaveCount(6);
+  await expect(page.getByRole('navigation', { name: 'Разделы кабинета' }).getByRole('link')).toHaveCount(4);
   await expect(page.locator('.savings-edit')).toHaveCount(0);
   const values = page.locator('.stat-value');
   const left = await values.nth(0).boundingBox();
@@ -25,7 +25,7 @@ test('keeps the dashboard layout, aligns balances and opens calculation details'
 test('saves a complete rule with integer kopecks and uses the shared button', async ({ page }) => {
   const state = await mockApi(page);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Правило', exact: true }).click();
+  await page.getByRole('button', { name: 'Редактировать', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('button', { name: 'Отмена' })).toHaveCount(0);
   await expect(dialog.getByLabel('Откладывать, %')).toHaveValue('');
@@ -41,7 +41,7 @@ test('saves a complete rule with integer kopecks and uses the shared button', as
   expect(call.body.save_percent).toBe(15);
   await expect(page.locator('.savings-name').first()).toHaveText('Отпуск');
   await page.reload();
-  await page.getByRole('button', { name: 'Правило', exact: true }).click();
+  await page.getByRole('button', { name: 'Редактировать', exact: true }).click();
   await expect(page.getByRole('dialog').getByLabel('Откладывать, %')).toHaveValue('');
   expect(state.calls.some((c) => c.path.endsWith('/rule') && c.method === 'GET')).toBe(false);
 });
@@ -126,7 +126,7 @@ test('changes recurring exclusion with the correct boolean direction', async ({ 
   await page.goto('/recurring');
   await page.getByRole('switch').click();
   await expect(page.getByRole('switch')).not.toBeChecked();
-  await expect(page.getByText('Необязательный', { exact: true })).toBeVisible();
+  await expect(page.getByText('Необязательный', { exact: true })).toHaveCount(0);
   expect(state.calls.find((c) => c.path.endsWith('/exclusion')).body).toEqual({ counterparty: 'Рассрочка за ноутбук', excluded: true });
 });
 
@@ -143,6 +143,7 @@ async function fillOnboarding(page) {
   await page.getByLabel('Дата рождения').fill('2006-03-15');
   await page.getByLabel('Доход в месяц, ₽', { exact: true }).fill('30000.01');
   await page.getByLabel('Сколько месяцев есть доход').fill('8');
+  await page.getByLabel('Есть обязательные платежи', { exact: true }).check();
   await page.getByLabel('Обязательные платежи в месяц, ₽').fill('7000');
   await page.getByLabel('Согласие на обработку персональных данных').check();
 }
@@ -177,7 +178,7 @@ test('filters transactions and supports browser back navigation', async ({ page 
   await page.getByRole('button', { name: 'Зачисления' }).click();
   await expect(page.locator('.money-history-row')).toHaveCount(2);
   await page.goBack();
-  await expect(page.getByRole('navigation')).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Разделы кабинета' })).toBeVisible();
 });
 
 test('disables withdrawals and answers while account is arrested', async ({ page }) => {
@@ -185,6 +186,7 @@ test('disables withdrawals and answers while account is arrested', async ({ page
   state.savings.arrested = true;
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Снять', exact: true })).toBeDisabled();
+  await page.goto('/decisions');
   await expect(page.getByRole('button', { name: 'Отложить 1 000 ₽', exact: true })).toBeDisabled();
 });
 

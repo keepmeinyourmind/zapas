@@ -5,6 +5,7 @@ async function approveQuestionnaire(page) {
   await page.getByLabel('Дата рождения').fill('2006-03-15');
   await page.getByLabel('Доход в месяц, ₽', { exact: true }).fill('30000');
   await page.getByLabel('Сколько месяцев есть доход').fill('8');
+  await page.getByLabel('Есть обязательные платежи', { exact: true }).check();
   await page.getByLabel('Обязательные платежи в месяц, ₽').fill('7000');
   await page.getByLabel('Согласие на обработку персональных данных').check();
   await page.getByRole('button', { name: 'Проверить анкету', exact: true }).click();
@@ -61,6 +62,41 @@ test('resumes step two across routes, modal close and reload without storing que
   await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
   await page.goto('/savings');
   await expect(page.getByRole('button', { name: 'Настроить правило', exact: true })).toBeVisible();
+});
+
+test('step two keeps entered values while savings status is refreshed', async ({ page }) => {
+  await page.clock.install();
+  const state = await mockApi(page, { missing: true });
+  await page.goto('/onboarding');
+  await approveQuestionnaire(page);
+  await page.getByRole('button', { name: 'Настроить правило', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Название цели').fill('Подушка');
+  await dialog.getByLabel('Сумма цели, ₽', { exact: true }).fill('36000');
+  await dialog.getByLabel('Откладывать, %').fill('10');
+  await dialog.getByLabel('Срок', { exact: true }).selectOption('12');
+  let finishRefresh;
+  const refresh = new Promise((resolve) => { finishRefresh = resolve; });
+  let markStarted;
+  const started = new Promise((resolve) => { markStarted = resolve; });
+  state.override = async ({ path }) => {
+    if (!path.endsWith('/savings')) return false;
+    markStarted();
+    await refresh;
+    return false;
+  };
+  await page.clock.runFor(15000);
+  await started;
+  try {
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel('Название цели')).toHaveValue('Подушка');
+  } finally {
+    finishRefresh();
+  }
+  await expect(dialog.getByLabel('Сумма цели, ₽', { exact: true })).toHaveValue('36000');
+  await dialog.getByRole('button', { name: 'Подключить копилку', exact: true }).click();
+  await expect(page).toHaveURL('/');
+  await expect(page.locator('.savings-name')).toHaveText('Подушка');
 });
 
 test('refusal leaves the client on step one and never opens rule creation', async ({ page }) => {
