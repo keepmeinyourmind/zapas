@@ -1,8 +1,9 @@
 import { useId } from 'react';
 export function Field({ label, className = 'col-12', children, ...props }) {
   const id = useId();
+  const placeholder = props.placeholder ?? (props.type === 'number' ? 'Например, 1000' : !props.type || props.type === 'text' ? 'Введите значение' : undefined);
   return <div className={className}><label className="form-label" htmlFor={id}>{label}</label>
-    {children ? <select id={id} className="form-select" {...props}>{children}</select> : <input id={id} className="form-control" {...props} />}
+    {children ? <select id={id} className="form-select" {...props}>{children}</select> : <input id={id} className="form-control" placeholder={placeholder} {...props} />}
   </div>;
 }
 export function Checkbox({ label, hint, ...props }) {
