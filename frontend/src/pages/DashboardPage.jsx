@@ -1,5 +1,3 @@
-import { useState } from 'react';
-import DepositModal from '../features/savings/DepositModal';
 import { Link, useOutletContext } from 'react-router-dom';
 import { Navigation } from '../layouts/AppLayout';
 import SavingsCard from '../features/savings/SavingsCard';
@@ -11,7 +9,6 @@ import { LoadingState, ErrorState } from '../shared/ui/States';
 import ConnectionNotice from '../features/onboarding/ConnectionNotice';
 
 export default function DashboardPage() {
-  const [showDepositModal, setShowDepositModal] = useState(false);
   const { savings, onboarding, onRule, onWithdraw, onExplain } = useOutletContext();
   const connected = Boolean(savings.data);
   const decisions = useDecisions({}, { enabled: connected });
@@ -26,7 +23,7 @@ export default function DashboardPage() {
     latest?.action === 'suggest_raise'
   );
   return <section className="view active" id="view-home"><div className="home-column"><div className="row g-3">
-    <div className="col-12">{savings.isPending ? <LoadingState /> : savings.isError && !savings.data ? savings.error.status === 404 ? <ConnectionNotice onboarding={onboarding} onRule={onRule} /> : <ErrorState error={savings.error} retry={savings.refetch} /> : <SavingsCard savings={savings.data} overview onRule={onRule} onWithdraw={onWithdraw} onDeposit={() => setShowDepositModal(true)} />}</div>
+    <div className="col-12">{savings.isPending ? <LoadingState /> : savings.isError && !savings.data ? savings.error.status === 404 ? <ConnectionNotice onboarding={onboarding} onRule={onRule} /> : <ErrorState error={savings.error} retry={savings.refetch} /> : <SavingsCard savings={savings.data} overview onRule={onRule} onWithdraw={onWithdraw} />}</div>
     <div className="col-12"><Navigation connected={connected} hasDecisions={needsAction} /></div>
     {savings.data && <BalanceCards savings={savings.data} decision={explanationDecision} onExplain={onExplain} />}
     {savings.isError && savings.data && <div className="col-12"><ErrorState error={savings.error} retry={savings.refetch} /></div>}
@@ -36,5 +33,5 @@ export default function DashboardPage() {
       {transactions.isPending ? <LoadingState /> : transactions.isError ? <ErrorState error={transactions.error} retry={transactions.refetch} /> : <TransactionList transactions={transactions.data.slice(0, 3)} />}
       <Link className="reference-button mt-3 text-decoration-none" to="/transactions">Перейти в историю</Link>
     </div></article></div>}
-  </div></div><DepositModal show={showDepositModal} onHide={() => setShowDepositModal(false)} onSuccess={() => savings.refetch()} /></section>;
+  </div></div></section>;
 }
