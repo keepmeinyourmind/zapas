@@ -10,7 +10,6 @@ import { InlineError } from '../shared/ui/States';
 import { formatDate } from '../shared/utils/date';
 import { clearOnboarding } from '../features/onboarding/status';
 import { runScenario, advanceTime } from '../features/demo/api';
-import ServiceHealth from '../features/demo/ServiceHealth';
 import TransactionForm from '../features/demo/TransactionForm';
 import AccountEventForm from '../features/demo/AccountEventForm';
 import { readBankRequest } from '../features/demo/pendingRequest';
@@ -60,7 +59,6 @@ export default function DemoPage() {
   return <section className="view" id="view-demo">
     <div className="mb-4"><h1 className="page-title">Проверка копилки</h1><p className="page-description">Сценарии, операции и события счёта</p></div>
     <div className="row g-3">
-      <div className="col-12"><ServiceHealth /></div>
       <div className="col-12"><article className="card"><div className="card-body p-4">
         <h2 className="section-title mb-3">Готовые сценарии</h2>
         <p className="small text-secondary">Запуск сценария сбрасывает данные клиента Ани. Сдвиг времени действует на весь сервер до его перезапуска.</p>

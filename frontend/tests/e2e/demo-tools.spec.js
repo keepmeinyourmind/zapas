@@ -1,18 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { mockApi } from './fixtures';
 
-test('checks health and recovers when the API becomes available', async ({ page }) => {
-  let unavailable = true;
-  const state = await mockApi(page, { override: async ({ path, json }) => {
-    if (path === '/health' && unavailable) { await json({ error: 'Соединение недоступно' }, 503); return true; }
-    return false;
-  } });
+test('demo shows scenarios without an API connection check', async ({ page }) => {
+  const state = await mockApi(page);
   await page.goto('/demo');
-  await expect(page.getByText('API недоступен', { exact: true })).toBeVisible();
-  unavailable = false;
-  await page.getByRole('button', { name: 'Проверить соединение', exact: true }).click();
-  await expect(page.getByText('API работает', { exact: true })).toBeVisible();
-  expect(state.calls.filter((call) => call.path === '/health').length).toBeGreaterThanOrEqual(2);
+  await expect(page.getByRole('heading', { name: 'Готовые сценарии' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Проверить соединение', exact: true })).toHaveCount(0);
+  expect(state.calls.filter((call) => call.path === '/health')).toHaveLength(0);
 });
 
 for (const type of ['incoming', 'outgoing', 'refund', 'internal', 'loan']) {
