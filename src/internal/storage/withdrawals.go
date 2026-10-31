@@ -53,23 +53,3 @@ func (r *Repo) SetPaymentExcluded(ctx context.Context, clientID, counterparty st
 	_, err := r.db.Exec(ctx, `DELETE FROM recurring_exclusions WHERE client_id = $1 AND counterparty = $2`, clientID, counterparty)
 	return err
 }
-
-// InsertDeposit записывает пополнение копилки. inserted=false — пополнение с таким id уже было.
-func (r *Repo) InsertDeposit(ctx context.Context, id, clientID string, amount domain.Money, at time.Time) (inserted bool, err error) {
-	tag, err := r.db.Exec(ctx, `
-		INSERT INTO deposits (id, client_id, amount, created_at) VALUES ($1, $2, $3, $4)
-		ON CONFLICT (id) DO NOTHING`, id, clientID, amount, at)
-	if err != nil {
-		return false, err
-	}
-	return tag.RowsAffected() == 1, nil
-}
-
-// GetDeposit — кто и сколько пополнял по этому id. Нет пополнения → domain.ErrNotFound.
-func (r *Repo) GetDeposit(ctx context.Context, id string) (clientID string, amount domain.Money, err error) {
-	err = r.db.QueryRow(ctx, `SELECT client_id, amount FROM deposits WHERE id = $1`, id).Scan(&clientID, &amount)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", 0, domain.ErrNotFound
-	}
-	return clientID, amount, err
-}
