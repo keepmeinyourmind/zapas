@@ -13,7 +13,7 @@ export default function DecisionsPage() {
   const items = query.data?.filter((decision) => filter === 'all' || (['pending', 'queued'].includes(decision.status) ? filter === 'pending' : filter === 'done')) || [];
   return <section className="view" id="view-decisions"><div className="mb-4"><h1 className="page-title">Решения</h1><p className="page-description">История действий системы и причины</p></div>
     <div className="d-flex flex-wrap gap-2 mb-3 filter-row" role="group" aria-label="Фильтр решений">{[['all', 'Все'], ['pending', 'Открытые вопросы'], ['done', 'Завершённые']].map(([value, text]) => <button className={`btn filter-chip${filter === value ? ' active' : ''}`} type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{text}</button>)}</div>
-    <article className="card"><div className="card-body p-3 p-lg-4">{query.isPending ? <LoadingState /> : query.isError ? <ErrorState error={query.error} retry={query.refetch} /> : <>
+    <article className="card"><div className="card-body px-3 px-lg-4 py-3">{query.isPending ? <LoadingState /> : query.isError ? <ErrorState error={query.error} retry={query.refetch} /> : <>
       {items.length ? items.map((decision) => <DecisionCard key={decision.id} decision={decision} blocked={!savings.data || savings.isError || savings.data.arrested || savings.data.paused} onExplain={onExplain} onRule={onRule} />) : <EmptyState>Решений в этой категории пока нет.</EmptyState>}
       {query.data.length >= limit && (limit < 200 ? <AppButton className="mt-3" onClick={() => setLimit(Math.min(200, limit + 50))}>Показать больше</AppButton> : <p className="form-text mt-3 mb-0">Показаны последние 200 решений.</p>)}
     </>}</div></article>

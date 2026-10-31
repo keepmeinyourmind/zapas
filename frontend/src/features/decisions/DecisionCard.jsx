@@ -1,6 +1,7 @@
 import DecisionActions from './DecisionActions';
 import { formatMoney } from '../../shared/utils/money';
 import { formatDate } from '../../shared/utils/date';
+import { decisionReason } from './reason';
 
 const statuses = { pending: 'Ожидает ответа', queued: 'В очереди', executed: 'Выполнено', skipped: 'Пропущено', expired: 'Время ответа истекло' };
 function title(decision) {
@@ -12,9 +13,9 @@ function title(decision) {
 }
 export default function DecisionCard({ decision, blocked, onExplain, onRule }) {
   const completed = !['pending', 'queued'].includes(decision.status);
-  return <div className="decision-row py-3">
+  return <div className="decision-row py-1">
     <div className="d-flex flex-wrap justify-content-between align-items-center gap-2"><strong>{title(decision)}</strong><span className={`decision-status${completed ? ' done' : ''}`}>{statuses[decision.status] || decision.status}</span></div>
-    <p className="text-secondary small mt-2 mb-3">{decision.reason}</p>
+    <p className="text-secondary small mt-2 mb-2">{decisionReason(decision)}</p>
     {decision.status === 'queued' && <p className="form-text">Сначала ответьте на предыдущий вопрос.</p>}
     <DecisionActions key={`${decision.id}-${decision.action}-${decision.status}`} decision={decision} blocked={blocked} />
     {decision.action === 'suggest_raise' && onRule && <button className="decision-action decision-action-primary" type="button" onClick={onRule}>Изменить процент</button>}
