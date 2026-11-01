@@ -27,6 +27,8 @@ for (const type of ['incoming', 'outgoing', 'refund', 'internal', 'loan']) {
     const delta = type === 'outgoing' ? -100001 : type === 'loan' ? 0 : 100001;
     expect(state.savings.card_balance).toBe(originalBalance + delta);
     await page.getByRole('link', { name: 'Назад на главную', exact: true }).click();
+    await page.getByRole('link', { name: 'Перейти в историю', exact: true }).click();
+    await page.getByRole('button', { name: type === 'outgoing' ? 'Расходы' : 'Зачисления', exact: true }).click();
     await expect(page.locator('.money-history-row').filter({ hasText: 'Тестовый контрагент' })).toBeVisible();
   });
 }
