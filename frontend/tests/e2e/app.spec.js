@@ -174,6 +174,9 @@ test('filters transactions and supports browser back navigation', async ({ page 
   await mockApi(page);
   await page.goto('/');
   await page.getByRole('link', { name: 'Перейти в историю' }).click();
+  await expect(page.getByRole('button', { name: 'Копилка', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Операций пока нет.')).toBeVisible();
+  await page.getByRole('button', { name: 'Расходы', exact: true }).click();
   await expect(page.locator('.money-history-row')).toHaveCount(1);
   await page.getByRole('button', { name: 'Зачисления' }).click();
   await expect(page.locator('.money-history-row')).toHaveCount(2);
@@ -209,7 +212,8 @@ test('shows empty states and no stale safety calculation in simple mode', async 
   state.savings.mode = 'simple';
   await page.goto('/');
   await expect(page.getByText('Операций пока нет.')).toBeVisible();
-  await expect(page.getByText('Пока нет расчёта')).toBeVisible();
+  await expect(page.getByText('В простом режиме не рассчитывается')).toBeVisible();
+  await expect(page.locator('.stat-value').last()).toHaveText('—');
   await expect(page.getByRole('button', { name: 'Как рассчитана безопасная сумма', exact: true })).toBeDisabled();
 });
 
