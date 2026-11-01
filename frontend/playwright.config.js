@@ -3,12 +3,12 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
+  forbidOnly: !!process.env.CI,
   workers: 2,
   timeout: 30000,
-  reporter: 'list',
+  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: 'http://127.0.0.1:5174',
-    channel: 'chrome',
     viewport: { width: 1280, height: 1000 },
     locale: 'ru-RU',
     timezoneId: 'Europe/Moscow',

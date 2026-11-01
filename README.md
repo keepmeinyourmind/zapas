@@ -141,6 +141,34 @@ cd src && TEST_DATABASE_URL='postgres://zapas:zapas@localhost:5433/zapas_test?ss
 
 Всё это запускается в CI на каждый пуш, вместе с `docker compose up` и прогоном сценариев (бейдж вверху).
 
+CI также запускает модульные тесты фронтенда, сборку и браузерные тесты Playwright в Chromium.
+Отчёт, скриншоты ошибок и трассировки доступны в артефакте `playwright-results` в GitHub Actions.
+Зависимости проверяются через `govulncheck` и `npm audit`: используемые уязвимости Go и npm-уязвимости
+уровня high/critical блокируют проверку; предупреждения npm меньшей важности остаются в логе.
+
+Проверки фронтенда локально (Node.js 24):
+
+```bash
+cd frontend
+npm ci
+npx playwright install chromium
+npm test
+npm run test:e2e
+npm audit --audit-level=high
+```
+
+Проверка Go-зависимостей:
+
+```bash
+go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+cd src && govulncheck ./...
+```
+
+Для `dev` настроена защита в GitHub: изменения вносятся через pull request,
+ветка должна быть актуальна, а проверки Go, фронтенда, зависимостей и Docker — успешны.
+Правило действует и для администраторов; force push и удаление ветки запрещены.
+Настройка хранится в GitHub и не переносится автоматически при создании другого репозитория.
+
 ## Архитектура
 
 ```
