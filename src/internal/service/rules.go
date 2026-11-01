@@ -112,3 +112,8 @@ func (s *Service) PatchRule(ctx context.Context, clientID string, p RulePatch) (
 	})
 	return rule, err
 }
+
+// GetRule возвращает текущее правило накопления клиента для отображения в UI.
+func (s *Service) GetRule(ctx context.Context, clientID string) (domain.SavingsRule, error) {
+	return s.store.Read().GetRule(ctx, clientID)
+}

@@ -186,6 +186,55 @@ func TestDecideSafeAmount(t *testing.T) {
 			cfg:        cfg,
 			wantAction: domain.DecisionSkip, wantAmount: 0, wantReason: "обязательные платежи",
 		},
+		{
+			name: "расход уменьшает safe, но 10% ещё помещаются — auto",
+			edit: func(in *Input) {
+				// Было: CardBalance=32000, Upcoming=20000 → safe=12000
+				// После расхода 9000: CardBalance=23000, Upcoming=20000
+				// safe=3000, want=3000 → ровно хватает на 10%
+				in.Client.CardBalance = domain.FromRubles(23000)
+			},
+			cfg:        cfg,
+			wantAction: domain.DecisionAuto, wantAmount: domain.FromRubles(3000),
+			wantReason: "обычн",
+		},
+		{
+			name: "расход оставил меньше 10% — спрашиваем про безопасную сумму",
+			edit: func(in *Input) {
+				// CardBalance=20500, Upcoming=20000 → safe=500
+				// want=3000, amount=min(500,3000)=500 ≥ MinTransfer(100)
+				// amount < want → ask с причиной «впереди платежи»
+				in.Client.CardBalance = domain.FromRubles(20500)
+			},
+			cfg:        cfg,
+			wantAction: domain.DecisionAsk, wantAmount: domain.FromRubles(500),
+			wantReason: "обязательные платежи",
+		},
+		{
+			name: "расход обнулил safe — не откладываем",
+			edit: func(in *Input) {
+				// CardBalance=20000, Upcoming=20000 → safe=0
+				in.Client.CardBalance = domain.FromRubles(20000)
+			},
+			cfg:        cfg,
+			wantAction: domain.DecisionSkip, wantAmount: 0,
+			wantReason: "обязательные платежи",
+		},
+		{
+			name: "фикс двойного вычитания: safe не превышает maxSafe",
+			edit: func(in *Input) {
+				// Сценарий бага: CardBalance=1500, Upcoming=2000
+				// Без фикса: safe = 1500-2000 = -500 → 0 (ok)
+				// Но если Upcoming был искусственно завышен из-за
+				// двойного учёта расхода, maxSafe защищает:
+				// maxSafe = 1500, safe ограничен сверху 1500
+				in.Client.CardBalance = domain.FromRubles(1500)
+				in.Upcoming = domain.FromRubles(2000)
+			},
+			cfg:        cfg,
+			wantAction: domain.DecisionSkip, wantAmount: 0,
+			wantReason: "обязательные платежи",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -9,7 +9,7 @@ export default function DepositModal({ show, onHide, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const amountInKopecks = parseInt(amount) * 100;
-    
+
     try {
       await depositMutation.mutateAsync({ amount: amountInKopecks });
       setAmount('');

@@ -232,7 +232,7 @@ func TestAnswerRechecksSafeAmount(t *testing.T) {
 	if err != nil || res.Decision == nil || res.Decision.Action != domain.DecisionAsk {
 		t.Fatalf("новый клиент — вопрос о сумме: %v %+v", err, res.Decision)
 	}
-	spend := incoming("t-spend", "Магазин", domain.CounterpartyLegal, 28000)
+	spend := incoming("t-spend", "Магазин", domain.CounterpartyLegal, 29950)
 	spend.Type = domain.TxKindOutgoing
 	if _, _, err := s.ProcessTransaction(ctx, spend); err != nil {
 		t.Fatal(err)
@@ -243,7 +243,7 @@ func TestAnswerRechecksSafeAmount(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, savings := balances(t, store); savings != 0 || d.Status != domain.DecisionSkipped {
-		t.Errorf("копилка %v, статус %s: на карте осталось 2 000 ₽ при тратах 4 000 ₽ в день — откладывать нельзя", savings, d.Status)
+		t.Errorf("копилка %v, статус %s: на карте осталось 50 ₽ — меньше минимального перевода", savings, d.Status)
 	}
 }
 
@@ -296,5 +296,28 @@ func TestPauseClosesQuestions(t *testing.T) {
 				t.Errorf("копилка %v после паузы, want 0", savings)
 			}
 		})
+	}
+}
+
+// При нулевом исходном прогнозе отсутствие строки трат означает 0, а не пересчёт по новой покупке.
+func TestAnswerUsesZeroSpendingForecast(t *testing.T) {
+	s, store, _ := testService(t)
+	subscribe(t, s)
+	ctx := context.Background()
+	res, _, err := s.ProcessTransaction(ctx, incoming("salary", "ООО Ромашка", domain.CounterpartyLegal, 30000))
+	if err != nil || res.Decision == nil {
+		t.Fatalf("предложение: %v %+v", err, res.Decision)
+	}
+	spend := incoming("spend", "Магазин", domain.CounterpartyLegal, 28000)
+	spend.Type = domain.TxKindOutgoing
+	if _, _, err := s.ProcessTransaction(ctx, spend); err != nil {
+		t.Fatal(err)
+	}
+	d, err := s.AnswerDecision(ctx, res.Decision.ID, Answer{Choice: ChoiceAmount, Amount: res.Decision.Amount})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, savings := balances(t, store); savings != domain.FromRubles(2000) || d.Status != domain.DecisionExecuted {
+		t.Fatalf("копилка %v, статус %s; ожидали 2 000 ₽ и executed", savings, d.Status)
 	}
 }

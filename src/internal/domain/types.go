@@ -42,12 +42,11 @@ func (m Money) String() string {
 type TxKind string
 
 const (
-	TxKindIncoming   TxKind = "incoming"
-	TxKindOutgoing   TxKind = "outgoing"
-	TxKindRefund     TxKind = "refund"
-	TxKindInternal   TxKind = "internal"
-	TxKindLoan       TxKind = "loan"
-	TxKindWithdrawal TxKind = "withdrawal"
+	TxKindIncoming TxKind = "incoming"
+	TxKindOutgoing TxKind = "outgoing"
+	TxKindRefund   TxKind = "refund"
+	TxKindInternal TxKind = "internal"
+	TxKindLoan     TxKind = "loan"
 )
 
 // CounterpartyKind — вид отправителя или получателя денег.

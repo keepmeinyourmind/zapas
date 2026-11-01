@@ -11,77 +11,6 @@ import (
 	"github.com/keepmeinyourmind/zapas/src/internal/storage"
 )
 
-// Deposit пополняет копилку с карты. Идемпотентно по id: повторный запрос
-// с тем же id ничего не меняет. created=false — это повтор.
-func (s *Service) Deposit(ctx context.Context, clientID, id string, amount domain.Money) (sv Savings, created bool, err error) {
-	switch {
-	case id == "":
-		return sv, false, domain.ValidationError("Не указан id пополнения")
-	case amount <= 0:
-		return sv, false, domain.ValidationError("Сумма должна быть больше нуля")
-	}
-
-	err = s.store.InTx(ctx, func(r *storage.Repo) error {
-		c, err := r.GetClientForUpdate(ctx, clientID)
-		if err != nil {
-			return err
-		}
-
-		if c.Arrested {
-			return domain.ErrAccountArrested
-		}
-
-		// Проверяем, есть ли достаточно средств на карте
-		if amount > c.CardBalance {
-			return domain.ValidationError(fmt.Sprintf("На карте только %s", c.CardBalance))
-		}
-
-		// Проверяем идемпотентность: было ли уже такое пополнение
-		_, prev, err := r.GetDeposit(ctx, id)
-		switch {
-		case err == nil && prev != amount:
-			return domain.ErrIDConflict // id уже занят другой суммой
-		case err == nil:
-			return nil // повтор: деньги второй раз не двигаем
-		case !errors.Is(err, domain.ErrNotFound):
-			return err
-		}
-
-		// Сохраняем пополнение
-		inserted, err := r.InsertDeposit(ctx, id, clientID, amount, s.now())
-		if err != nil {
-			return err
-		}
-		if !inserted {
-			return domain.ErrIDConflict
-		}
-
-		// Создаём запись в истории операций (с тем же id для идемпотентности)
-		tx := domain.Transaction{
-			ID:               id,
-			ClientID:         clientID,
-			Amount:           amount,
-			Type:             domain.TxKindInternal,
-			Counterparty:     "Пополнение копилки",
-			CounterpartyKind: domain.CounterpartySelf,
-			OccurredAt:       s.now(),
-		}
-		if _, err := r.InsertTransaction(ctx, tx); err != nil {
-			return err
-		}
-
-		created = true
-		return r.MoveToSavings(ctx, clientID, amount)
-	})
-
-	if err != nil {
-		return sv, false, err
-	}
-
-	sv, err = s.GetSavings(ctx, clientID)
-	return sv, created, err
-}
-
 // Withdraw снимает деньги из копилки на карту. Идемпотентно по id: повторный запрос
 // с тем же id ничего не меняет. created=false — это повтор.
 func (s *Service) Withdraw(ctx context.Context, clientID, id string, amount domain.Money) (sv Savings, created bool, err error) {
@@ -119,21 +48,6 @@ func (s *Service) Withdraw(ctx context.Context, clientID, id string, amount doma
 		if amount > c.SavingsBalance {
 			return domain.ValidationError(fmt.Sprintf("В копилке только %s", c.SavingsBalance))
 		}
-
-		// Создаём запись в истории операций (с тем же id для идемпотентности)
-		tx := domain.Transaction{
-			ID:               id,
-			ClientID:         clientID,
-			Amount:           amount, // Положительная сумма
-			Type:             domain.TxKindWithdrawal,
-			Counterparty:     "Снятие из копилки",
-			CounterpartyKind: domain.CounterpartySelf,
-			OccurredAt:       s.now(),
-		}
-		if _, err := r.InsertTransaction(ctx, tx); err != nil {
-			return err
-		}
-
 		created = true
 		return r.MoveToCard(ctx, clientID, amount)
 	})
@@ -210,4 +124,19 @@ func withoutExcluded(recurring []domain.RecurringPayment, excluded map[string]bo
 		}
 	}
 	return out
+}
+
+// ListOperations возвращает хронологию всех движений копилки: переводы и снятия.
+func (s *Service) ListOperations(ctx context.Context, clientID string, limit int) ([]storage.Operation, error) {
+	if limit == 0 {
+		limit = 50
+	}
+	if limit < 1 || limit > 100 {
+		return nil, domain.ValidationError("limit должен быть от 1 до 100")
+	}
+	repo := s.store.Read()
+	if _, err := repo.GetClient(ctx, clientID); err != nil {
+		return nil, err
+	}
+	return repo.ListOperations(ctx, clientID, limit)
 }

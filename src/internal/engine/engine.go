@@ -167,6 +167,17 @@ func Decide(in Input, cfg Config) domain.Decision {
 	if safe < 0 {
 		safe = 0
 	}
+	// Защита от двойного вычитания: если расход уже уменьшил CardBalance,
+	// но Upcoming ещё не пересчитался (или включает траты, которые уже списаны),
+	// safe может искусственно обнулиться. Ограничиваем сверху: безопасная сумма
+	// не может превышать «деньги на карте минус буфер» даже если Upcoming = 0.
+	maxSafe := in.Client.CardBalance - cfg.Buffer
+	if maxSafe < 0 {
+		maxSafe = 0
+	}
+	if safe > maxSafe {
+		safe = maxSafe
+	}
 	// Сколько клиент хочет откладывать, но не больше, чем осталось до цели.
 	want := min(in.Tx.Amount.Share(in.Rule.SavePercent), goalLeft(in))
 	amount := min(safe, want)

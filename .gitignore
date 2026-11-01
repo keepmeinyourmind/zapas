@@ -16,6 +16,7 @@
 # Зависимости и сборка фронтенда
 /frontend/node_modules/
 /frontend/dist/
+/frontend/.vite/
 /frontend/.npm-cache/
 
 # Результаты тестов и скриншоты

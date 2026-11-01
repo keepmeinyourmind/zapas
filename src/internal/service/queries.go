@@ -18,16 +18,17 @@ func (s *Service) ListDecisions(ctx context.Context, clientID string, status dom
 
 // Savings — состояние копилки для экрана клиента.
 type Savings struct {
-	ClientID          string       `json:"client_id"`
-	GoalName          string       `json:"goal_name"`
-	GoalAmount        domain.Money `json:"goal_amount"`
-	Balance           domain.Money `json:"balance"`
-	CardBalance       domain.Money `json:"card_balance"`
-	ProgressPercent   float64      `json:"progress_percent"` // только для показа, деньги — в копейках
-	Paused            bool         `json:"paused"`
-	Mode              domain.Mode  `json:"mode"`
-	Arrested          bool         `json:"arrested"`
-	PendingDecisionID *string      `json:"pending_decision_id"`
+	ClientID          string        `json:"client_id"`
+	GoalName          string        `json:"goal_name"`
+	GoalAmount        domain.Money  `json:"goal_amount"`
+	Balance           domain.Money  `json:"balance"`
+	CardBalance       domain.Money  `json:"card_balance"`
+	SafeAmount        *domain.Money `json:"safe_amount"`      // актуальный остаток; null в простом режиме
+	ProgressPercent   float64       `json:"progress_percent"` // только для показа, деньги — в копейках
+	Paused            bool          `json:"paused"`
+	Mode              domain.Mode   `json:"mode"`
+	Arrested          bool          `json:"arrested"`
+	PendingDecisionID *string       `json:"pending_decision_id"`
 }
 
 func (s *Service) GetSavings(ctx context.Context, clientID string) (Savings, error) {
@@ -53,6 +54,23 @@ func (s *Service) GetSavings(ctx context.Context, clientID string) (Savings, err
 		sv.PendingDecisionID = &q.ID
 	case !errors.Is(err, domain.ErrNotFound):
 		return Savings{}, err
+	}
+	if c.Mode == domain.ModeSmart {
+		// Объяснение решения хранит исходный расчёт. Для карточки используем
+		// текущий баланс с прогнозом последнего предложения, как при ответе на него.
+		latest, err := repo.ListDecisions(ctx, clientID, "", 1)
+		if err != nil {
+			return Savings{}, err
+		}
+		var d domain.Decision
+		if len(latest) > 0 {
+			d = latest[0]
+		}
+		safe, err := s.safeNow(ctx, repo, c, rule, d, s.now())
+		if err != nil {
+			return Savings{}, err
+		}
+		sv.SafeAmount = &safe
 	}
 	return sv, nil
 }

@@ -38,12 +38,13 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/clients/{id}/decisions", s.listDecisions)
 	mux.HandleFunc("POST /api/decisions/{id}/answer", s.answerDecision)
 	mux.HandleFunc("GET /api/clients/{id}/savings", s.getSavings)
-	mux.HandleFunc("POST /api/clients/{id}/savings/deposit", s.deposit)
 	mux.HandleFunc("POST /api/clients/{id}/savings/withdraw", s.withdraw)
 	mux.HandleFunc("GET /api/clients/{id}/recurring", s.listRecurring)
 	mux.HandleFunc("PUT /api/clients/{id}/recurring/exclusion", s.setPaymentExcluded)
 	mux.HandleFunc("POST /api/debug/advance-time", s.advanceTime)
 	mux.HandleFunc("POST /api/scenarios/{name}/run", s.runScenario)
+	mux.HandleFunc("GET /api/clients/{id}/rule", s.getRule)
+	mux.HandleFunc("GET /api/clients/{id}/operations", s.listOperations)
 	return s.cors(mux)
 }
 
